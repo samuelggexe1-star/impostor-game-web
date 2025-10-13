@@ -1,4 +1,4 @@
-const socket = io("https://impostor-game-server-6343.onrender.com"); // TU URL
+const socket = io("https://impostor-game-server-6343.onrender.com");
 
 const pantallaInicio = document.getElementById("pantalla-inicio");
 const pantallaJuego = document.getElementById("pantalla-juego");
@@ -56,3 +56,4 @@ socket.on("asignarRol", (rol, palabraAsignada) => {
 });
 
 btnMostrar.onclick = () => {
+
