@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego del Impostor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="container">
+    <h1>🎭 Juego del Impostor</h1>
+
+    <!-- Pantalla de inicio -->
+    <div id="pantalla-inicio">
+      <input id="nombre" type="text" placeholder="Tu nombre">
+      <button id="btn-unirse">Unirse</button>
+    </div>
+
+    <!-- Pantalla de juego -->
+    <div id="pantalla-juego" class="oculto">
+      <h2 id="mensaje-rol"></h2>
+      <button id="btn-mostrar">Ver palabra</button>
+      <div id="palabra" class="oculto"></div>
+      <button id="btn-ocultar" class="oculto">Ocultar</button>
+      <button id="btn-nueva" class="oculto">Nueva ronda</button>
+    </div>
+  </div>
+
+  <!-- Librería Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
