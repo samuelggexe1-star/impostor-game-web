@@ -1,5 +1,5 @@
 // ⚠️ CAMBIA esta URL por la de tu servidor Render:
-const socket = io("https://impostor-game-server-6343.onrender.com");
+const socket = io("https://impostor-game-server-6343.onrender.com/");
 
 const pantallaInicio = document.getElementById("pantalla-inicio");
 const pantallaJuego = document.getElementById("pantalla-juego");
@@ -58,4 +58,5 @@ btnNueva.onclick = () => {
   palabraDiv.classList.add("oculto");
   btnNueva.classList.add("oculto");
 };
+
 
