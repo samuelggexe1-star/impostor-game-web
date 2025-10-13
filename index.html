@@ -10,13 +10,16 @@
   <div id="container">
     <h1>🎭 Juego del Impostor</h1>
 
-    <!-- Pantalla de inicio -->
+    <!-- Pantalla inicio -->
     <div id="pantalla-inicio">
-      <input id="nombre" type="text" placeholder="Tu nombre">
+      <input id="nombre" placeholder="Tu nombre">
+      <input id="sala" placeholder="Código de sala">
+      <input id="prompt" placeholder="Prompt para la ronda (host)">
       <button id="btn-unirse">Unirse</button>
+      <button id="btn-prompt">Enviar prompt y nueva ronda</button>
     </div>
 
-    <!-- Pantalla de juego -->
+    <!-- Pantalla juego -->
     <div id="pantalla-juego" class="oculto">
       <h2 id="mensaje-rol"></h2>
       <button id="btn-mostrar">Ver palabra</button>
@@ -24,9 +27,10 @@
       <button id="btn-ocultar" class="oculto">Ocultar</button>
       <button id="btn-nueva" class="oculto">Nueva ronda</button>
     </div>
+
+    <div id="jugadores"></div>
   </div>
 
-  <!-- Librería Socket.IO -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="script.js"></script>
 </body>
