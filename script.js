@@ -58,3 +58,4 @@ btnNueva.onclick = () => {
   palabraDiv.classList.add("oculto");
   btnNueva.classList.add("oculto");
 };
+
