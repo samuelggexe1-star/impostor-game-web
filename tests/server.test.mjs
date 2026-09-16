@@ -1,23 +1,27 @@
-// Pruebas de la centralita local: reparto de mensajes, salas y limites.
-// Arranca el servidor de verdad en un puerto libre y habla con el por HTTP.
+// Pruebas del servidor de partidas: aqui las mesas viven en el servidor,
+// asi que se comprueba que reparte, que respeta los permisos y que a cada
+// jugador solo le llegan sus cartas.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { start, server } from '../server.js';
+import { start, server, rooms } from '../server.js';
 
-const PORT = 8799;
+const PORT = 8801;
 const BASE = `http://127.0.0.1:${PORT}`;
 process.env.QUIET = '1';
 
 await start(PORT, '127.0.0.1');
+test.after(() => {
+  for (const room of [...rooms.values()]) room.destroy('fin de pruebas');
+  server.close();
+});
 
-test.after(() => server.close());
-
-/** Abre un SSE y va acumulando los mensajes recibidos. */
-function sse(pathname) {
+/** Cliente SSE que va guardando lo que recibe. */
+function connect(code, peer, name = 'Jugador') {
   const events = [];
   const ctrl = new AbortController();
-  const ready = fetch(BASE + pathname, { signal: ctrl.signal }).then(async (res) => {
+  const qs = new URLSearchParams({ room: code, peer, name, avatar: '🙂' });
+  const ready = fetch(`${BASE}/api/events?${qs}`, { signal: ctrl.signal }).then((res) => {
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -39,11 +43,22 @@ function sse(pathname) {
     })();
     return res;
   });
-  return { events, ready, close: () => ctrl.abort() };
+  return {
+    events,
+    ready,
+    close: () => ctrl.abort(),
+    last: () => [...events].reverse().find((e) => e.type === 'state'),
+    send: (data) =>
+      fetch(`${BASE}/api/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: code, from: peer, data })
+      })
+  };
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (fn, ms = 2000) => {
+const until = async (fn, ms = 4000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
     if (fn()) return true;
@@ -52,131 +67,205 @@ const until = async (fn, ms = 2000) => {
   return false;
 };
 
-const send = (body) =>
-  fetch(BASE + '/lan/send', {
+async function createRoom(owner = 'o1', extra = {}) {
+  const res = await fetch(`${BASE}/api/room`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      owner: { id: owner, name: 'Samuel' },
+      config: { sb: 10, bb: 20, startingChips: 1000, turnSeconds: 600 },
+      bots: 0,
+      ...extra
+    })
   });
+  return res.json();
+}
 
-test('responde al ping con las direcciones de la red', async () => {
-  const res = await fetch(BASE + '/lan/ping');
-  const data = await res.json();
-  assert.equal(data.ok, true);
-  assert.equal(typeof data.port, 'number');
-  assert.ok(Array.isArray(data.addresses));
-});
+test('dice quien es y sirve la web', async () => {
+  const ping = await (await fetch(`${BASE}/api/ping`)).json();
+  assert.equal(ping.ok, true);
+  assert.equal(ping.mode, 'servidor');
 
-test('sirve la web', async () => {
-  const res = await fetch(BASE + '/');
-  assert.equal(res.status, 200);
-  const html = await res.text();
+  const html = await (await fetch(`${BASE}/`)).text();
   assert.match(html, /Hold'em Club/);
-  const css = await fetch(BASE + '/css/style.css');
-  assert.equal(css.status, 200);
+  const css = await fetch(`${BASE}/css/style.css`);
   assert.match(css.headers.get('content-type'), /text\/css/);
 });
 
 test('no deja salir de la carpeta del proyecto', async () => {
-  const res = await fetch(BASE + '/%2e%2e/%2e%2e/etc/passwd');
-  assert.ok(res.status === 403 || res.status === 404, 'ruta fuera del proyecto rechazada');
+  const res = await fetch(`${BASE}/%2e%2e/%2e%2e/etc/passwd`);
+  assert.ok(res.status === 403 || res.status === 404);
 });
 
-test('el anfitrion abre sala, el invitado entra y los mensajes van y vienen', async () => {
-  const host = sse('/lan/events?room=TST1&peer=h1&role=host&name=Ana');
-  await host.ready;
-  assert.ok(await until(() => host.events.some((e) => e.type === 'ready')), 'la sala se abre');
-
-  const rooms = await (await fetch(BASE + '/lan/rooms')).json();
-  assert.ok(rooms.find((r) => r.code === 'TST1' && r.host === 'Ana'), 'la sala se anuncia en la red');
-
-  const guest = sse('/lan/events?room=TST1&peer=g1&role=guest&name=Luis');
-  await guest.ready;
-  assert.ok(await until(() => guest.events.some((e) => e.type === 'ready')), 'el invitado entra');
-  assert.ok(await until(() => host.events.some((e) => e.type === 'peer-join' && e.peer === 'g1')),
-    'el anfitrion se entera de quien llega');
-
-  await send({ room: 'TST1', from: 'g1', to: 'host', data: { type: 'act', action: 'fold' } });
-  assert.ok(await until(() => host.events.some((e) => e.type === 'msg' && e.data.action === 'fold')),
-    'la accion del invitado llega al anfitrion');
-
-  await send({ room: 'TST1', from: 'host', to: 'g1', data: { type: 'state', view: { pot: 40 } } });
-  assert.ok(await until(() => guest.events.some((e) => e.type === 'msg' && e.data.view.pot === 40)),
-    'el estado llega al invitado');
-
-  guest.close();
-  assert.ok(await until(() => host.events.some((e) => e.type === 'peer-leave' && e.peer === 'g1')),
-    'el anfitrion se entera de quien se va');
-  host.close();
-  await wait(100);
+test('crea una mesa y la anuncia', async () => {
+  const { code } = await createRoom('dueño1');
+  assert.match(code, /^[A-Z0-9]{4}$/);
+  const list = await (await fetch(`${BASE}/api/rooms`)).json();
+  assert.ok(list.find((r) => r.code === code), 'la mesa sale en la lista');
+  rooms.get(code).destroy('fin');
 });
 
-test('dos salas no se mezclan', async () => {
-  const a = sse('/lan/events?room=AAAA&peer=ha&role=host&name=A');
-  const b = sse('/lan/events?room=BBBB&peer=hb&role=host&name=B');
-  await Promise.all([a.ready, b.ready]);
-  await until(() => a.events.length && b.events.length);
+test('dos jugadores entran y el servidor reparte la mano', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  await ana.ready;
+  assert.ok(await until(() => ana.events.some((e) => e.type === 'accepted')), 'Ana entra');
 
-  const ga = sse('/lan/events?room=AAAA&peer=g&role=guest&name=G');
-  await ga.ready;
-  await until(() => ga.events.some((e) => e.type === 'ready'));
+  const luis = connect(code, 'luis', 'Luis');
+  await luis.ready;
+  assert.ok(await until(() => luis.events.some((e) => e.type === 'accepted')), 'Luis entra');
 
-  await send({ room: 'AAAA', from: 'host', to: 'g', data: { secreto: 'solo-A' } });
-  await until(() => ga.events.some((e) => e.type === 'msg'));
-  assert.ok(!b.events.some((e) => e.type === 'msg'), 'la sala B no ve nada de la sala A');
+  // Con dos jugadores, la mesa arranca sola.
+  assert.ok(await until(() => {
+    const v = ana.last();
+    return v && v.view.stage === 'preflop' && v.view.handNumber >= 1;
+  }, 6000), 'se reparte una mano sin que nadie haga de crupier');
 
-  a.close(); b.close(); ga.close();
-  await wait(100);
+  const vAna = ana.last().view;
+  const vLuis = luis.last().view;
+  const yoAna = vAna.players.find((p) => p && p.isYou);
+  assert.equal(yoAna.hole.length, 2, 'Ana ve sus dos cartas');
+  for (const p of vAna.players.filter(Boolean)) {
+    if (!p.isYou) assert.equal(p.hole, null, 'las cartas de Luis no viajan a Ana');
+  }
+  for (const p of vLuis.players.filter(Boolean)) {
+    if (!p.isYou) assert.equal(p.hole, null, 'las cartas de Ana no viajan a Luis');
+  }
+
+  rooms.get(code).destroy('fin');
+  ana.close();
+  luis.close();
 });
 
-test('no se puede entrar en una sala que no existe', async () => {
-  const guest = sse('/lan/events?room=ZZZZ&peer=g9&role=guest&name=X');
-  await guest.ready;
-  assert.ok(await until(() => guest.events.some((e) => e.type === 'error' && e.reason === 'no-room')),
-    'avisa de que no hay sala');
-  guest.close();
+test('la accion de un jugador llega a la mesa del servidor', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  const luis = connect(code, 'luis', 'Luis');
+  await Promise.all([ana.ready, luis.ready]);
+  await until(() => ana.last() && ana.last().view.stage === 'preflop', 6000);
+
+  const room = rooms.get(code);
+  const turno = room.table.game.seats[room.table.game.toAct];
+  const cliente = turno.id === 'ana' ? ana : luis;
+  const fichasAntes = turno.chips;
+
+  await cliente.send({ type: 'act', action: 'fold' });
+  assert.ok(await until(() => {
+    const p = room.table.game.playerById(turno.id);
+    return p.status === 'folded' || room.table.game.handNumber > 1 || p.chips !== fichasAntes;
+  }), 'el servidor aplica la accion');
+
+  room.destroy('fin');
+  ana.close();
+  luis.close();
 });
 
-test('un codigo ya usado no se puede robar', async () => {
-  const host = sse('/lan/events?room=DUPE&peer=h1&role=host&name=Ana');
-  await host.ready;
-  await until(() => host.events.some((e) => e.type === 'ready'));
+test('el chat pasa por el servidor y lo ven todos', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  const luis = connect(code, 'luis', 'Luis');
+  await Promise.all([ana.ready, luis.ready]);
+  await until(() => luis.last());
 
-  const ladron = sse('/lan/events?room=DUPE&peer=h2&role=host&name=Otro');
-  await ladron.ready;
-  assert.ok(await until(() => ladron.events.some((e) => e.type === 'error' && e.reason === 'code-taken')),
-    'el segundo anfitrion es rechazado');
-  host.close(); ladron.close();
-  await wait(100);
+  await ana.send({ type: 'chat', text: 'buena mano' });
+  assert.ok(await until(() => {
+    const v = luis.last();
+    return v && (v.view.messages || []).some((m) => m.text === 'buena mano');
+  }), 'Luis recibe el mensaje de Ana');
+
+  rooms.get(code).destroy('fin');
+  ana.close();
+  luis.close();
 });
 
-test('si el anfitrion se va, sus invitados se enteran', async () => {
-  const host = sse('/lan/events?room=BYE1&peer=h1&role=host&name=Ana');
-  await host.ready;
-  await until(() => host.events.some((e) => e.type === 'ready'));
-  const guest = sse('/lan/events?room=BYE1&peer=g1&role=guest&name=Luis');
-  await guest.ready;
-  await until(() => guest.events.some((e) => e.type === 'ready'));
+test('solo quien creo la mesa puede cambiarla', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  const luis = connect(code, 'luis', 'Luis');
+  await Promise.all([ana.ready, luis.ready]);
+  await until(() => luis.last());
+  const room = rooms.get(code);
+  const antes = room.table.game.seated().length;
 
-  host.close();
-  assert.ok(await until(() => guest.events.some((e) => e.type === 'host-gone')),
-    'el invitado recibe el aviso de cierre');
-  guest.close();
-  await wait(100);
+  await luis.send({ type: 'command', cmd: 'addBot', payload: {} });
+  await wait(250);
+  assert.equal(room.table.game.seated().length, antes, 'un invitado no añade bots');
+
+  await ana.send({ type: 'command', cmd: 'addBot', payload: {} });
+  assert.ok(await until(() => room.table.game.seated().length === antes + 1),
+    'la dueña de la mesa sí');
+
+  room.destroy('fin');
+  ana.close();
+  luis.close();
+});
+
+test('quien no está en la mesa no puede mandarle nada', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  await ana.ready;
+  await until(() => ana.events.some((e) => e.type === 'accepted'));
+
+  const res = await fetch(`${BASE}/api/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room: code, from: 'colado', data: { type: 'act', action: 'fold' } })
+  });
+  assert.equal(res.status, 403);
+
+  rooms.get(code).destroy('fin');
+  ana.close();
+});
+
+test('avisa si la sala no existe', async () => {
+  const perdido = connect('ZZZZ', 'x1', 'Perdido');
+  await perdido.ready;
+  assert.ok(await until(() => perdido.events.some((e) => e.type === 'error' && e.reason === 'no-room')));
+  perdido.close();
+});
+
+test('si te desconectas guardas la silla y puedes volver', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  const luis = connect(code, 'luis', 'Luis');
+  await Promise.all([ana.ready, luis.ready]);
+  await until(() => luis.last());
+  const room = rooms.get(code);
+  const fichas = room.table.game.playerById('luis').chips;
+
+  luis.close();  // se le acaba la bateria
+  await wait(300);
+  assert.ok(room.table.game.playerById('luis'), 'la silla sigue ahí');
+
+  const luis2 = connect(code, 'luis', 'Luis');
+  await luis2.ready;
+  assert.ok(await until(() => luis2.events.some((e) => e.type === 'accepted')), 'vuelve a entrar');
+  assert.equal(room.table.game.playerById('luis').chips, fichas, 'conserva sus fichas');
+
+  room.destroy('fin');
+  ana.close();
+  luis2.close();
 });
 
 test('rechaza mensajes enormes y json invalido', async () => {
-  const big = await fetch(BASE + '/lan/send', {
+  const big = await fetch(`${BASE}/api/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: 'x'.repeat(600 * 1024)
+    body: 'x'.repeat(400 * 1024)
   }).catch(() => ({ status: 400 }));
-  assert.ok(big.status >= 400, 'un mensaje gigante no pasa');
+  assert.ok(big.status >= 400);
 
-  const bad = await fetch(BASE + '/lan/send', {
+  const bad = await fetch(`${BASE}/api/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: '{no es json'
+    body: '{roto'
   });
   assert.equal(bad.status, 400);
+});
+
+test('permite que la web esté en otro dominio (CORS)', async () => {
+  const res = await fetch(`${BASE}/api/ping`, { headers: { Origin: 'https://ejemplo.github.io' } });
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  const pre = await fetch(`${BASE}/api/send`, { method: 'OPTIONS' });
+  assert.equal(pre.status, 204);
 });

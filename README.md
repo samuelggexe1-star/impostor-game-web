@@ -1,57 +1,50 @@
 # ♠️ Hold'em Club
 
-Texas Hold'em No Limit para jugar con tus amigos desde el navegador. Sin registro,
-sin servidor que mantener y sin instalar nada: uno crea la mesa, comparte un código
-de 4 letras y los demás entran desde su móvil o su portátil.
+Texas Hold'em No Limit para jugar con tus amigos desde el navegador. Sin registro
+y sin instalar nada: uno crea la mesa, comparte un código de 4 letras y los demás
+entran desde su móvil, su tablet o su portátil.
 
-## Jugar con los amigos que están en tu wifi
+**Las mesas viven en el servidor.** Él baraja, reparte y lleva los tiempos, así que
+nadie tiene que dejar su dispositivo encendido haciendo de crupier: si se te apaga
+la pantalla o cierras la tapa, la partida sigue y tu silla te espera. Y como todo
+viaja por HTTPS normal, funciona también en redes que bloquean casi todo, como las
+de los colegios.
 
-Esta es la forma más fiable: no depende de internet ni de servidores de terceros.
+## Ponerlo en marcha (vale desde un iPad, sin terminal)
+
+Necesitas que el juego esté colgado en algún sitio. Con [Render](https://render.com)
+son unos toques y el plan gratuito sobra:
+
+1. Entra en Render y pulsa **New → Blueprint**.
+2. Elige este repositorio. El archivo `render.yaml` ya le dice todo lo que necesita.
+3. Espera a que despliegue y quédate con la dirección que te da, algo como
+   `https://holdem-club.onrender.com`.
+4. Esa dirección es la que repartes. Todos la abrís, tú pulsas **Crear mesa** y a
+   tus amigos les aparece en la lista de mesas abiertas: un toque y dentro.
+
+> Ojo con el plan gratuito de Render: si nadie juega durante un rato, el servidor se
+> duerme. El primero en entrar esperará cerca de un minuto a que despierte. A partir
+> de ahí va fino.
+
+Si prefieres levantarlo en tu ordenador (hace falta Node 18 o más nuevo):
 
 ```bash
 npm start
 ```
 
-Al arrancar te dice exactamente qué direcciones repartir:
+Te imprime la dirección de tu red local para repartirla a quien esté en la misma
+wifi. Esto sirve en casa; en una wifi de colegio no, porque esas redes suelen
+impedir que los dispositivos se vean entre sí.
 
-```
-  ♠️  Hold'em Club en marcha
+## Jugar
 
-  En este ordenador:   http://localhost:8080
-
-  Para tus amigos en la misma wifi:
-      http://192.168.1.42:8080
-```
-
-1. Tú abres `http://localhost:8080` y pulsas **Crear mesa**.
-2. Tus amigos abren `http://192.168.1.42:8080` (la dirección que te haya salido)
-   desde el móvil o el portátil, **conectados a la misma wifi**.
-3. En la pestaña **Unirme** les aparece tu mesa en la lista: un toque y dentro.
-   Si prefieres, les pasas el código de 4 letras.
-
-El ordenador que ejecuta `npm start` hace de servidor, así que tiene que quedarse
-encendido mientras jugáis. El puerto se cambia con `PORT=3000 npm start`.
-
-> El servidor solo pasa mensajes de un navegador a otro: no conoce las reglas ni
-> ve las cartas. Quien reparte sigue siendo el navegador del anfitrión. Como no
-> lleva contraseñas, úsalo en una red de confianza (tu casa), no en una wifi
-> pública.
-
-## Jugar con amigos que no están en tu casa
-
-Si publicas la web (GitHub Pages, por ejemplo) no hay servidor que ejecutar, y la
-partida usa conexión directa entre navegadores (WebRTC):
-
-1. Abre la web y escribe tu nombre.
-2. **Crear mesa** → obtienes un código (por ejemplo `KQ7M`) y un enlace para compartir.
-3. Tus amigos entran en **Unirme**, escriben el código y ya están sentados.
+1. Abrís la dirección del servidor y escribís vuestro nombre.
+2. **Crear mesa** → sale un código de 4 letras (y un enlace para compartir).
+3. Los demás entran en **Unirme**: o tocan la mesa en la lista, o escriben el código.
 4. Puedes rellenar los huecos con bots mientras llega la gente.
 
-> El que crea la mesa hace de crupier: mientras tenga la pestaña abierta la partida
-> sigue viva. Si la cierra, se acaba la mano para todos.
-
-¿Solo quieres practicar? La pestaña **Practicar** abre una mesa contra bots sin
-necesidad de conexión con nadie.
+¿Solo quieres practicar? La pestaña **Practicar** abre una mesa contra bots en tu
+propio dispositivo, sin conexión con nadie.
 
 ## Qué trae
 
@@ -69,6 +62,7 @@ necesidad de conexión con nadie.
 - Sonido sintetizado (cartas, fichas, golpe de check, victoria…): cero archivos que descargar.
 
 **Para la partida con amigos**
+- Si te quedas sin conexión o cierras la pestaña, tu silla y tus fichas te esperan.
 - Chat y emojis que se lanzan sobre el tapete.
 - Historial de manos con el board y quién ganó qué.
 - Estadísticas por jugador: manos, % de manos ganadas y VPIP.
@@ -80,23 +74,31 @@ necesidad de conexión con nadie.
 - Aviso de turno aunque tengas la pestaña en segundo plano.
 - Funciona en móvil y respeta `prefers-reduced-motion`.
 
-## Publicarlo en internet
+## Sin servidor propio
 
-La web es estática, así que se puede servir tal cual. Con **GitHub Pages**: en
-*Settings → Pages*, elige la rama y la carpeta raíz; en un minuto tendrás algo como
-`https://usuario.github.io/impostor-game-web/`. Ahí no hay servidor propio, así que
-las mesas usan WebRTC.
+También puedes colgar solo la web (por ejemplo en **GitHub Pages**: *Settings →
+Pages*, eligiendo la rama y la carpeta raíz). Entonces no hay servidor que reparta y
+las mesas usan conexión directa entre navegadores (WebRTC). Funciona entre casas
+normales, pero **muchas redes de colegios y oficinas lo bloquean**.
+
+Si te pasa, el vestíbulo te deja apuntar a tu propio servidor: pulsa *indica la
+dirección de tu servidor* y pega la de Render. La web se queda donde está y las
+partidas pasan por tu servidor.
 
 En cualquier caso hace falta servirlo por HTTP (no vale abrir `index.html` con doble
 clic) porque el código usa módulos ES.
 
 ## Cómo funciona por dentro
 
-No hay backend. El anfitrión ejecuta el motor del juego en su navegador y manda a
-cada jugador **su** copia del estado, ya censurada: las cartas de los demás no salen
-del navegador del anfitrión hasta el showdown. La conexión es WebRTC directa entre
-navegadores mediante [PeerJS](https://peerjs.com); su servidor público solo sirve
-para que los navegadores se encuentren, los datos de la partida no pasan por él.
+El servidor tiene una mesa por sala y manda a cada jugador **su** copia del estado,
+ya censurada: las cartas de los demás no salen del servidor hasta el showdown. Para
+hablar usa SSE (el servidor te habla) y POST (tú le hablas): HTTPS del normal, nada
+de websockets ni puertos raros, que es justo lo que sobrevive a una red restrictiva.
+
+Si no hay servidor, el mismo juego funciona con el motor dentro del navegador del
+anfitrión y conexión directa por WebRTC ([PeerJS](https://peerjs.com)). Las dos
+formas hablan el mismo protocolo, así que al resto del juego le da igual por dónde
+lleguen los mensajes.
 
 ```
 js/
@@ -106,16 +108,16 @@ js/
 ├── engine.js     Reglas de Hold'em: turnos, apuestas, botes laterales, showdown
 ├── table.js      Ritmo de la partida: tiempos, temporizadores, bots, niveles
 ├── bots.js       Decisión de los bots según personalidad
-├── net.js        Sesiones local / anfitrión / invitado (WebRTC o red local)
-├── lan.js        Transporte para la wifi de casa contra server.js
+├── net.js        Sesiones: local, contra el servidor, o anfitrión/invitado por WebRTC
+├── relay.js      Conexión con el servidor de partidas (SSE + POST)
 ├── sound.js      Efectos con WebAudio
 ├── fx.js         Confeti, fichas voladoras, tweens
 ├── ui.js         Pintado de la mesa y animaciones
 └── app.js        Vestíbulo, ajustes y arranque
 ```
 
-Y `server.js` en la raíz: sirve la web y hace de centralita para el modo wifi. No
-tiene dependencias: solo Node.
+Y `server.js` en la raíz: sirve la web y aloja las mesas, reutilizando el mismo
+motor que corre en el navegador. No tiene dependencias: solo Node.
 
 El motor (`engine.js`) es lógica pura: no toca el DOM ni la red, así que se puede
 probar entero desde Node.
@@ -126,21 +128,23 @@ sabe (ni le importa) si los mensajes llegan por WebRTC o por la red de casa.
 ## Pruebas
 
 ```bash
-npm test          # 35 pruebas, sin dependencias externas
+npm test          # 38 pruebas, sin dependencias externas
 ```
 
 Cubren las reglas que más fácil se rompen (ciegas heads-up, subida mínima, all-in
 corto, botes laterales, empates, conservación de fichas en 40 manos aleatorias), el
-protocolo de red con un PeerJS simulado —incluyendo que un invitado nunca reciba las
-cartas ajenas— y la centralita local: reparto de mensajes, salas que no se mezclan,
-códigos que no se pueden robar y rutas que no salen de la carpeta.
+protocolo por WebRTC con un PeerJS simulado, y el servidor: que reparta sin que nadie
+haga de crupier, que a cada jugador solo le lleguen sus cartas, que solo quien creó la
+mesa pueda cambiarla, que puedas reconectar y conservar tus fichas, y que nadie de
+fuera pueda mandarle nada a una mesa.
 
 ## Limitaciones
 
-- Si el anfitrión cierra la pestaña, la mesa se cierra. No hay partidas persistentes.
-- En modo wifi, el ordenador que ejecuta `npm start` debe seguir encendido.
-- WebRTC (el modo por internet) puede fallar en redes muy restrictivas —algunas
-  corporativas o con VPN—; en tu casa, usa el modo wifi y te ahorras el problema.
-- El servidor local no pide contraseña: cualquiera en esa wifi puede entrar en una
-  mesa si sabe el código. Para jugar en casa está bien; no lo expongas a internet.
+- Las mesas viven en memoria: si el servidor se reinicia o se duerme, las partidas en
+  curso se pierden. Una mesa vacía se recoge sola a los 20 minutos.
+- En el plan gratuito de Render el servidor se duerme; el primero en entrar espera
+  cerca de un minuto.
+- No hay contraseñas: quien sepa el código de 4 letras puede sentarse. Para jugar
+  entre amigos vale; no lo uses para nada serio.
+- Sin servidor, el modo WebRTC puede fallar en redes de colegios y oficinas.
 - Las fichas son de mentira: esto es para jugar entre amigos, no para apostar dinero.

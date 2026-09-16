@@ -1,0 +1,12 @@
+# Despliegue en Render con un par de toques (sirve también desde el iPad):
+# render.com → New → Blueprint → elige este repositorio.
+services:
+  - type: web
+    name: holdem-club
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

@@ -4,7 +4,7 @@
 // No hay servidor que desplegar: solo el broker publico para el saludo inicial.
 
 import { Emitter, Table } from './table.js';
-import { LanHostLink, LanGuestLink } from './lan.js';
+import { RelayLink } from './relay.js';
 
 const PREFIX = 'holdemclub-es-';
 const PROTOCOL = 1;
@@ -68,34 +68,16 @@ export class LocalSession extends Emitter {
 
 /** Sesion de anfitrion: igual que la local pero ademas sirve a los invitados. */
 export class HostSession extends LocalSession {
-  constructor(table, youId, code, transport = 'peer') {
+  constructor(table, youId, code) {
     super(table, youId);
     this.online = true;
     this.code = code;
-    this.transport = transport;
     this.peer = null;
-    this.link = null;
-    this.conns = new Map();  // playerId -> conexion (WebRTC o LAN)
+    this.conns = new Map();  // playerId -> DataConnection
     this.table.on('update', (events) => this.broadcast(events));
   }
 
   async open() {
-    if (this.transport === 'lan') return this.openLan();
-    return this.openPeer();
-  }
-
-  /** Centralita local: los invitados llegan por el servidor de la wifi. */
-  async openLan() {
-    this.link = new LanHostLink(this.code, {
-      peerId: this.you,
-      name: (this.table.game.playerById(this.you) || {}).name || 'Anfitrion',
-      onConnection: (conn) => this.accept(conn)
-    });
-    await this.link.open();
-    return this.code;
-  }
-
-  async openPeer() {
     if (!peerAvailable()) throw new Error('PeerJS no disponible');
     return new Promise((resolve, reject) => {
       const peer = new window.Peer(PREFIX + this.code, peerOptions());
@@ -217,18 +199,14 @@ export class HostSession extends LocalSession {
     if (this.peer) {
       try { this.peer.destroy(); } catch (_) {}
     }
-    if (this.link) {
-      try { this.link.close(); } catch (_) {}
-    }
     super.close();
   }
 }
 
 /** Sesion de invitado: manda acciones y pinta lo que diga el anfitrion. */
 export class GuestSession extends Emitter {
-  constructor({ code, name, avatar, playerId, transport = 'peer' }) {
+  constructor({ code, name, avatar, playerId }) {
     super();
-    this.transport = transport;
     this.code = code.toUpperCase();
     this.name = name;
     this.avatar = avatar;
@@ -243,48 +221,10 @@ export class GuestSession extends Emitter {
   }
 
   async open() {
-    if (this.transport === 'lan') return this.openLan();
     return this.openPeer();
   }
 
-  /** Entra por el servidor de la wifi local. */
-  async openLan() {
-    const link = new LanGuestLink(this.code, { peerId: this.you, name: this.name });
-    this.link = link;
-    await link.connect();
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('timeout')), 10000);
-      link.on('data', (msg) => {
-        const done = this.handleMessage(msg, (v) => {
-          clearTimeout(timeout);
-          resolve(v);
-        }, (e) => {
-          clearTimeout(timeout);
-          reject(e);
-        });
-        return done;
-      });
-      link.on('close', () => {
-        if (!this.closed) this.emit('hostgone');
-      });
-      link.on('reconnecting', () => this.emit('netstatus', 'reconectando'));
-      this.conn = {
-        open: true,
-        send: (m) => link.send(m),
-        close: () => link.close()
-      };
-      link.send({
-        type: 'join',
-        protocol: PROTOCOL,
-        playerId: this.you,
-        name: this.name,
-        avatar: this.avatar
-      });
-      this.startPing();
-    });
-  }
-
-  /** Reparte los mensajes del anfitrion. Comun a WebRTC y LAN. */
+  /** Reparte los mensajes que manda quien reparte. */
   handleMessage(msg, resolve, reject) {
     if (!msg) return;
     if (msg.type === 'accepted') {
@@ -391,8 +331,95 @@ export class GuestSession extends Emitter {
     this.closed = true;
     clearInterval(this._pingTimer);
     try { if (this.conn) this.conn.close(); } catch (_) {}
-    try { if (this.link) this.link.close(); } catch (_) {}
     try { if (this.peer) this.peer.destroy(); } catch (_) {}
+  }
+}
+
+/**
+ * Sesion contra el servidor de partidas: alli viven las cartas y los tiempos.
+ * Tu dispositivo solo manda lo que haces y pinta lo que le devuelven, asi que
+ * la partida sigue aunque se te apague la pantalla.
+ */
+export class RelaySession extends Emitter {
+  constructor({ code, name, avatar, playerId }) {
+    super();
+    this.code = String(code || '').toUpperCase();
+    this.name = name;
+    this.avatar = avatar;
+    this.you = playerId;
+    this.isHost = false;      // lo dice el servidor al aceptarte
+    this.online = true;
+    this.serverHosted = true;
+    this.lastView = null;
+    this.latency = 0;
+    this.closed = false;
+    this.link = null;
+  }
+
+  async open() {
+    const link = new RelayLink(this.code, {
+      playerId: this.you,
+      name: this.name,
+      avatar: this.avatar
+    });
+    this.link = link;
+
+    link.on('data', (msg) => {
+      if (msg.type === 'state') {
+        this.lastView = msg.view;
+        this.emit('state', msg.view, msg.events || []);
+      } else if (msg.type === 'pong') {
+        this.latency = Date.now() - msg.at;
+        this.emit('latency', this.latency);
+      }
+    });
+    link.on('closed', (reason) => this.emit('hostgone', reason));
+    link.on('offline', () => this.emit('netstatus', 'reconectando…'));
+    link.on('online', () => this.emit('netstatus', ''));
+
+    const accepted = await link.connect();
+    this.you = accepted.playerId || this.you;
+    this.isHost = !!accepted.owner;
+    this.startPing();
+    return accepted;
+  }
+
+  startPing() {
+    clearInterval(this._pingTimer);
+    this._pingTimer = setInterval(() => {
+      if (this.link && this.link.open) this.link.send({ type: 'ping', at: Date.now() });
+    }, 5000);
+  }
+
+  act(action, amount) {
+    this.link.send({ type: 'act', action, amount });
+    return { ok: true, remote: true };
+  }
+
+  chat(text) {
+    this.link.send({ type: 'chat', text });
+  }
+
+  emote(emoji, seat) {
+    this.link.send({ type: 'emote', emoji, seat });
+  }
+
+  command(cmd, payload = {}) {
+    this.link.send({ type: 'command', cmd, payload });
+  }
+
+  setAway(away) {
+    this.link.send({ type: 'away', away });
+  }
+
+  refresh() {
+    if (this.lastView) this.emit('state', this.lastView, []);
+  }
+
+  close() {
+    this.closed = true;
+    clearInterval(this._pingTimer);
+    if (this.link) this.link.close();
   }
 }
 

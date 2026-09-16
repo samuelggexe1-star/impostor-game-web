@@ -282,6 +282,16 @@ input[type="range"]::-moz-range-thumb {
   font-size: .9rem;
 }
 .lan-banner b { color: var(--green); }
+.lan-banner.warn {
+  background: linear-gradient(120deg, rgba(246, 196, 83, .14), rgba(246, 196, 83, .04));
+  border-color: rgba(246, 196, 83, .38);
+}
+.lan-banner.warn b { color: var(--gold); }
+.link-btn {
+  background: none; border: 0; padding: 0;
+  color: var(--gold); font: inherit; text-decoration: underline;
+  cursor: pointer;
+}
 .lan-banner code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: rgba(0, 0, 0, .35);
@@ -984,6 +994,16 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   font-size: .9rem;
 }
 .lan-banner b { color: var(--green); }
+.lan-banner.warn {
+  background: linear-gradient(120deg, rgba(246, 196, 83, .14), rgba(246, 196, 83, .04));
+  border-color: rgba(246, 196, 83, .38);
+}
+.lan-banner.warn b { color: var(--gold); }
+.link-btn {
+  background: none; border: 0; padding: 0;
+  color: var(--gold); font: inherit; text-decoration: underline;
+  cursor: pointer;
+}
 .lan-banner code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: rgba(0, 0, 0, .35);
