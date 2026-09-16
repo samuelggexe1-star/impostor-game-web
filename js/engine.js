@@ -78,14 +78,25 @@ export class Game {
   leave(id) {
     const p = this.playerById(id);
     if (!p) return false;
-    if (this.inHand() && (p.status === 'active' || p.status === 'allin')) {
-      // Se va con la mano viva: se le pasa a retirado para no bloquear la mesa.
+    if (this.inHand() && p.committed > 0) {
+      // Ojo: sus fichas ya estan en el bote. Si le quitamos la silla ahora, esas
+      // fichas desaparecen al recontar los botes. Se queda retirado y la silla
+      // se libera al empezar la mano siguiente.
       p.status = 'folded';
       p.away = true;
+      p.leaving = true;
       if (this.toAct === p.seat) this.afterAction();
+      return true;
     }
     this.seats[p.seat] = null;
     return true;
+  }
+
+  /** Libera las sillas de quienes se fueron con una mano en curso. */
+  removeLeavers() {
+    for (const p of this.seated()) {
+      if (p.leaving) this.seats[p.seat] = null;
+    }
   }
 
   playerById(id) {
@@ -144,6 +155,7 @@ export class Game {
   }
 
   startHand() {
+    this.removeLeavers();
     const pool = this.eligibleForHand();
     if (pool.length < 2) {
       this.stage = STAGE.IDLE;

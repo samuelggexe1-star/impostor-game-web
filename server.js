@@ -144,6 +144,9 @@ class Room {
   attach(playerId, res, profile) {
     const prev = this.clients.get(playerId);
     if (prev && prev.res !== res) {
+      // Alguien vuelve a entrar con la misma identidad: avisamos a la conexion
+      // vieja en vez de dejar dos pantallas mostrando lo mismo.
+      sseSend(prev.res, { type: 'closed', reason: 'Has abierto la mesa en otra ventana' });
       try { prev.res.end(); } catch (_) {}
     }
     this.clients.set(playerId, { res, name: profile.name });

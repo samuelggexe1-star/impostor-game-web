@@ -248,3 +248,24 @@ test('el motor es determinista con el mismo seed', () => {
   assert.deepEqual(a.seats[0].hole, b.seats[0].hole);
   assert.deepEqual(a.seats[1].hole, b.seats[1].hole);
 });
+
+test('las fichas del bote no desaparecen si alguien abandona a mitad de mano', () => {
+  const g = makeGame([1000, 1000, 1000]);
+  g.button = 0;
+  g.startHand();
+  g.act('p1', 'raise', 200);
+  g.act('p2', 'call');
+  g.act('p0', 'call');
+  const apostado = g.seated().reduce((a, p) => a + p.committed, 0);
+  assert.equal(apostado, 600);
+
+  g.leave('p2');   // cierra la pestaña con sus fichas ya en el bote
+  g.buildPots();
+  const enBote = g.pots.reduce((a, p) => a + p.amount, 0);
+  assert.equal(enBote, 600, 'sus fichas siguen en el bote');
+  assert.ok(g.playerById('p2'), 'conserva la silla hasta que acabe la mano');
+  assert.equal(g.playerById('p2').status, 'folded', 'pero queda retirado');
+
+  g.startHand();
+  assert.equal(g.playerById('p2'), null, 'la silla se libera en la mano siguiente');
+});

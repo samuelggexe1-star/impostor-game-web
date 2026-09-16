@@ -269,3 +269,45 @@ test('permite que la web esté en otro dominio (CORS)', async () => {
   const pre = await fetch(`${BASE}/api/send`, { method: 'OPTIONS' });
   assert.equal(pre.status, 204);
 });
+
+test('al volver de una desconexion te vuelven a repartir', async () => {
+  const { code } = await createRoom('ana');
+  const ana = connect(code, 'ana', 'Ana');
+  const luis = connect(code, 'luis', 'Luis');
+  await Promise.all([ana.ready, luis.ready]);
+  await until(() => luis.last());
+  const room = rooms.get(code);
+
+  luis.close();                       // se le va la wifi
+  await wait(300);
+  assert.equal(room.table.game.playerById('luis').sittingOut, true, 'queda fuera mientras no está');
+
+  const luis2 = connect(code, 'luis', 'Luis');
+  await luis2.ready;
+  await until(() => luis2.events.some((e) => e.type === 'accepted'));
+  const p = room.table.game.playerById('luis');
+  assert.equal(p.away, false);
+  assert.equal(p.sittingOut, false, 'vuelve al reparto, no se queda de espectador');
+  assert.ok(room.table.game.eligibleForHand().some((x) => x.id === 'luis'),
+    'entra en la siguiente mano');
+
+  room.destroy('fin');
+  ana.close();
+  luis2.close();
+});
+
+test('avisa a la ventana antigua cuando abres la mesa en otra', async () => {
+  const { code } = await createRoom('ana');
+  const v1 = connect(code, 'ana', 'Ana');
+  await v1.ready;
+  await until(() => v1.events.some((e) => e.type === 'accepted'));
+
+  const v2 = connect(code, 'ana', 'Ana');   // misma identidad, otra ventana
+  await v2.ready;
+  assert.ok(await until(() => v1.events.some((e) => e.type === 'closed')),
+    'la primera ventana recibe el aviso en vez de quedarse mostrando lo mismo');
+
+  rooms.get(code).destroy('fin');
+  v1.close();
+  v2.close();
+});

@@ -53,6 +53,26 @@ function loadStored() {
   if (!state.profile.id) state.profile.id = 'p-' + Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * Identidad para esta pestaña. El nombre y el avatar se recuerdan en el
+ * dispositivo, pero el jugador es por pestaña: si no, dos ventanas del mismo
+ * iPad entran como la misma persona y acaban viendo las mismas cartas.
+ * Sobrevive a recargar la pagina, que es lo que pasa al reconectar.
+ */
+function tabPlayerId() {
+  try {
+    let id = sessionStorage.getItem('holdem-club/pestana');
+    if (!id) {
+      id = (state.profile.id || 'p') + '-' + Math.random().toString(36).slice(2, 6);
+      sessionStorage.setItem('holdem-club/pestana', id);
+    }
+    return id;
+  } catch (_) {
+    if (!state._fallbackId) state._fallbackId = 'p-' + Math.random().toString(36).slice(2, 10);
+    return state._fallbackId;
+  }
+}
+
 function saveProfile() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(state.profile));
@@ -177,7 +197,7 @@ function readConfig() {
 function makeTable(config) {
   const table = new Table(config);
   table.join({
-    id: state.profile.id,
+    id: tabPlayerId(),
     name: state.profile.name,
     avatar: state.profile.avatar,
     chips: config.startingChips
@@ -194,7 +214,7 @@ function playSolo() {
   const count = Number($('soloBots').value);
   const style = $('soloStyle').value;
   for (let i = 0; i < count; i++) table.addBot(style === 'mixto' ? null : style);
-  const session = new LocalSession(table, state.profile.id);
+  const session = new LocalSession(table, tabPlayerId());
   enterGame(session, 'LOCAL');
   table.start();
 }
@@ -212,7 +232,7 @@ async function createRoom() {
     btn.textContent = 'Creando mesa…';
     try {
       const { code } = await createRelayRoom({
-        owner: { id: state.profile.id, name: state.profile.name },
+        owner: { id: tabPlayerId(), name: state.profile.name },
         config: { mode: config.mode, startingChips: config.startingChips, sb: config.sb, bb: config.bb, turnSeconds: config.turnSeconds },
         bots
       });
@@ -220,7 +240,7 @@ async function createRoom() {
         code,
         name: state.profile.name,
         avatar: state.profile.avatar,
-        playerId: state.profile.id
+        playerId: tabPlayerId()
       });
       await session.open();
       enterGame(session, code);
@@ -238,7 +258,7 @@ async function createRoom() {
     toastLobby('No se ha podido abrir una sala en red. Se abre una partida local contra bots.', 'error');
     const table = makeTable(config);
     for (let i = 0; i < Math.max(1, bots); i++) table.addBot();
-    const session = new LocalSession(table, state.profile.id);
+    const session = new LocalSession(table, tabPlayerId());
     enterGame(session, 'LOCAL');
     table.start();
     return;
@@ -253,7 +273,7 @@ async function createRoom() {
   let session = null;
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    session = new HostSession(table, state.profile.id, code);
+    session = new HostSession(table, tabPlayerId(), code);
     try {
       await session.open();
       break;
@@ -312,8 +332,8 @@ async function joinRoom() {
   $('btnJoin').disabled = true;
 
   const session = state.server
-    ? new RelaySession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: state.profile.id })
-    : new GuestSession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: state.profile.id });
+    ? new RelaySession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId() })
+    : new GuestSession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId() });
 
   try {
     await session.open();

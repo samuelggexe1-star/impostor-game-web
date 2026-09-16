@@ -131,7 +131,10 @@ export class Table extends Emitter {
   join(player) {
     const existing = this.game.playerById(player.id);
     if (existing) {
+      // Al volver hay que devolverle al reparto: si solo quitamos 'away' y
+      // dejamos 'sittingOut', se queda mirando el resto de la partida.
       existing.away = false;
+      existing.sittingOut = false;
       existing.name = player.name || existing.name;
       existing.avatar = player.avatar || existing.avatar;
       this.pushEvent({ t: 'rejoin', seat: existing.seat, name: existing.name });
@@ -191,6 +194,9 @@ export class Table extends Emitter {
     p.away = !!away;
     p.sittingOut = !!away;
     this.publish();
+    // Si se marcha cuando le tocaba hablar, resolvemos su turno ya en vez de
+    // tener a los demas esperando a que se agote el reloj.
+    if (p.away && this.game.toAct === p.seat) this.forceAction(p, 'ausente');
   }
 
   rebuy(id, amount) {

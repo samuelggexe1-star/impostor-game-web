@@ -82,6 +82,7 @@ export class TableUI {
       btnCall: $('btnCall'),
       btnRaise: $('btnRaise'),
       waitingMsg: $('waitingMsg'),
+      btnRebuySeat: $('btnRebuySeat'),
       handHud: $('handHud'),
       hudHand: $('hudHand'),
       hudEquity: $('hudEquity'),
@@ -274,6 +275,11 @@ export class TableUI {
     });
     btnRaise.addEventListener('click', () => this.doAction('raise', this.raiseAmount));
 
+    this.el.btnRebuySeat.addEventListener('click', () => {
+      this.session.command('rebuy', {});
+      sfx.chip(3);
+    });
+
     this.el.btnSitOut.addEventListener('click', () => {
       const me = this.me();
       const away = !(me && me.sittingOut);
@@ -360,7 +366,8 @@ export class TableUI {
     // --- boton del crupier, ligeramente al lado para no tapar las cartas
     const dealerSeat = this.seatEls.get(view.button);
     if (view.button >= 0 && dealerSeat && view.players[view.button]) {
-      const pt = this.point(dealerSeat.angle + 11, 0.94);
+      // Bastante girado para no pisar la chapa de ciega, que va arriba a la derecha.
+      const pt = this.point(dealerSeat.angle + 17, 0.93);
       this.el.dealer.hidden = false;
       this.el.dealer.style.left = pt.x.toFixed(2) + '%';
       this.el.dealer.style.top = pt.y.toFixed(2) + '%';
@@ -595,6 +602,9 @@ export class TableUI {
     const me = this.me();
     const yourTurn = !!legal.yourTurn;
 
+    // Sin fichas: que pueda recargar el mismo, sin depender de nadie.
+    const sinFichas = !!me && me.chips <= 0 && me.status !== 'active' && me.status !== 'allin';
+    this.el.btnRebuySeat.hidden = !sinFichas;
     this.el.waitingMsg.hidden = yourTurn;
     this.el.betPanel.hidden = !yourTurn || !legal.canRaise;
     document.querySelector('.buttons').style.display = yourTurn ? 'grid' : 'none';

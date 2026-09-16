@@ -379,7 +379,13 @@ input[type="range"]::-moz-range-thumb {
 /* ---- superficie ---- */
 
 .table-area { flex: 1; position: relative; display: grid; place-items: center; min-height: 0; padding: 10px; }
-.table-wrap { position: relative; width: min(100%, 1080px); aspect-ratio: 16 / 9.6; max-height: 100%; }
+.table-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 1120px;
+  max-height: 100%;
+}
 
 .table-felt {
   position: absolute; inset: 0;
@@ -412,7 +418,7 @@ input[type="range"]::-moz-range-thumb {
 .felt-logo span { display: block; font-size: .62em; letter-spacing: .5em; }
 
 .center-stack {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: 50%; top: 45%;
   transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   width: 80%;
@@ -543,7 +549,7 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   z-index: 5;
 }
 .seat.away { opacity: .6; }
-.seat.folded { opacity: .45; filter: grayscale(.7); }
+.seat.folded { opacity: .62; filter: grayscale(.55); }
 .seat.acting { z-index: 12; }
 
 .seat-body {
@@ -630,13 +636,17 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .seat-cards {
   position: absolute;
   left: 50%; top: 50%;
-  transform: translate(-50%, -88%);
-  display: flex; gap: 3px;
+  transform: translate(-50%, -86%);
+  display: flex; gap: 2px;
   z-index: 1;
 }
 .seat-body { z-index: 2; }
 /* Los de la mitad superior asoman sus cartas hacia el centro, no hacia el borde. */
-.seat.top .seat-cards { transform: translate(-50%, -10%); }
+.seat.top .seat-cards { transform: translate(-50%, -16%); }
+
+/* Un poco de abanico para que se lean como dos cartas y no como una mancha. */
+.seat:not(.you) .seat-cards .card:first-child { transform: rotate(-7deg) translateX(3px); }
+.seat:not(.you) .seat-cards .card:last-child  { transform: rotate(7deg) translateX(-3px); }
 .seat-cards .card { --cw: clamp(30px, 4.6vw, 46px); }
 .seat.you .seat-cards {
   top: -8px;
@@ -649,12 +659,12 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .seat.you .seat-cards:hover .card { transform: translateY(-8px) rotate(0deg) scale(1.06); }
 .seat-cards .card { transition: transform .25s ease; }
 
-.seat.top .action-bubble { bottom: auto; top: calc(100% + 6px); }
-.seat.you:not(.top) .action-bubble { bottom: calc(100% + clamp(58px, 9vw, 92px)); }
-.seat.top.you .action-bubble, .seat.top .hand-name {
-  top: auto;
-  bottom: calc(100% + 6px);
-}
+/* Las cartas asoman por un lado, asi que la burbuja va por el otro. */
+.seat:not(.top):not(.you) .action-bubble { bottom: auto; top: calc(100% + 6px); }
+.seat.top .action-bubble { top: auto; bottom: calc(100% + 6px); }
+.seat.you:not(.top) .action-bubble { bottom: calc(100% + clamp(70px, 11vw, 112px)); top: auto; }
+.seat.top .hand-name { top: auto; bottom: calc(100% + 34px); }
+.seat:not(.top) .hand-name { top: calc(100% + 30px); bottom: auto; }
 
 .seat-bet {
   position: absolute;
@@ -966,8 +976,8 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 
 .toast {
   position: fixed;
-  left: 50%; bottom: calc(96px + env(safe-area-inset-bottom));
-  transform: translateX(-50%) translateY(14px);
+  left: 50%; top: calc(72px + env(safe-area-inset-top));
+  transform: translateX(-50%) translateY(-14px);
   background: rgba(10, 16, 30, .96);
   border: 1px solid var(--line-strong);
   border-radius: 12px;
@@ -1039,7 +1049,6 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   .hand-hud { min-width: 0; }
   .pre-actions { flex-direction: row; flex-wrap: wrap; gap: 12px; font-size: .78rem; }
   .emote-bar { max-width: none; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; }
-  .table-wrap { aspect-ratio: auto; width: 100%; height: 100%; }
   .table-area { padding: 4px; }
   .top-center .hand-chip { display: none; }
 }
@@ -1067,6 +1076,35 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   .action-bar { padding: 8px 10px; }
   .hand-hud { min-width: 0; }
   .brand-cards .brand-card { width: 44px; height: 62px; }
+}
+
+/* ---- Tablet (iPad y similares): pantalla grande pero se juega con el dedo ---- */
+@media (pointer: coarse) and (min-width: 820px) {
+  .seat { width: clamp(126px, 15vw, 168px); }
+  .seat-name { font-size: 1rem; }
+  .seat-chips { font-size: 1rem; }
+  .seat-cards .card { --cw: clamp(38px, 5vw, 54px); }
+  .seat.you .seat-cards .card { --cw: clamp(48px, 5.6vw, 66px); }
+  .card { --cw: clamp(48px, 6.6vw, 74px); }
+
+  /* No hay teclado: sobran las letras de los atajos. */
+  .btn.action small { display: none; }
+  .btn.action { padding: 13px 10px; font-size: 1.1rem; border-radius: 14px; }
+  .chip-btn { padding: 9px 6px; font-size: .92rem; }
+  .bet-slider input[type="number"] { width: 120px; padding: 9px; font-size: 1rem; }
+  input[type="range"]::-webkit-slider-thumb { width: 28px; height: 28px; }
+
+  .pre-actions { font-size: .95rem; gap: 14px; }
+  .pre-actions input { width: 22px; height: 22px; }
+  .emote-btn { width: 42px; height: 42px; font-size: 1.25rem; }
+  .emote-bar { flex-wrap: nowrap; overflow-x: auto; max-width: 250px; scrollbar-width: none; }
+  .emote-bar::-webkit-scrollbar { display: none; }
+  .icon-btn { width: 46px; height: 46px; font-size: 1.2rem; }
+  .room-code { font-size: 1.25rem; }
+  .waiting-msg { font-size: 1rem; padding: 13px; }
+  .hud-row { font-size: .95rem; }
+  .action-bar { padding: 10px 16px; gap: 10px; }
+  .hand-hud { padding: 7px 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
