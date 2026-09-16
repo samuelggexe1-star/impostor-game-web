@@ -31,6 +31,8 @@
       <p class="tagline">Texas Hold'em No Limit para jugar con tus amigos. Sala privada, código de 4 letras y a repartir.</p>
     </header>
 
+    <div id="lanBanner" class="lan-banner" hidden></div>
+
     <div class="lobby-grid">
       <div class="panel identity">
         <h2>Tu jugador</h2>
@@ -102,6 +104,7 @@
             <input id="joinCode" class="code-input" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
           </label>
           <button id="btnJoin" class="btn primary big">Entrar en la mesa</button>
+          <div id="lanRooms" class="lan-rooms" hidden></div>
           <p class="hint">Mantén abierta la pestaña de quien creó la mesa: es quien reparte.</p>
           <div id="joinStatus" class="status"></div>
         </div>
@@ -170,7 +173,7 @@
         <div class="center-stack">
           <div class="pot-wrap" id="potWrap">
             <div class="pot-chips" id="potChips" aria-hidden="true"></div>
-            <div class="pot-amount"><span class="pot-label">BOTE</span><b id="potAmount">0</b></div>
+            <div class="pot-amount"><span class="pot-label">BOTE</span><b id="potAmount">0</b><span id="potPending" class="pot-pending"></span></div>
             <div class="side-pots" id="sidePots"></div>
           </div>
           <div class="board" id="board"></div>

@@ -2,6 +2,7 @@
 
 import { Table, DEFAULT_CONFIG } from './table.js';
 import { LocalSession, HostSession, GuestSession, roomCode, peerAvailable } from './net.js';
+import { lanAvailable, lanRooms } from './lan.js';
 import { TableUI } from './ui.js';
 import { sfx } from './sound.js';
 import { motion } from './fx.js';
@@ -23,8 +24,18 @@ const state = {
   },
   session: null,
   table: null,
-  ui: null
+  ui: null,
+  lan: null          // {port, addresses} si la web la sirve server.js
 };
+
+/** En red local usamos la centralita del servidor; fuera, WebRTC. */
+function transport() {
+  return state.lan ? 'lan' : 'peer';
+}
+
+function canGoOnline() {
+  return !!state.lan || peerAvailable();
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -194,8 +205,8 @@ async function createRoom() {
   const config = readConfig();
   const bots = Number($('cfgBots').value);
 
-  if (!peerAvailable()) {
-    toastLobby('No se ha podido cargar la conexión P2P. Se abre una partida local contra bots.', 'error');
+  if (!canGoOnline()) {
+    toastLobby('No se ha podido abrir una sala en red. Se abre una partida local contra bots.', 'error');
     const table = makeTable(config);
     for (let i = 0; i < Math.max(1, bots); i++) table.addBot();
     const session = new LocalSession(table, state.profile.id);
@@ -212,13 +223,15 @@ async function createRoom() {
 
   let code = roomCode();
   let session = null;
+  let lastError = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    session = new HostSession(table, state.profile.id, code);
+    session = new HostSession(table, state.profile.id, code, transport());
     try {
       await session.open();
       break;
     } catch (err) {
-      session.peer && session.peer.destroy();
+      lastError = err;
+      try { session.close(); } catch (_) {}
       session = null;
       if (err && err.message === 'code-taken') {
         code = roomCode();
@@ -232,7 +245,10 @@ async function createRoom() {
   btn.textContent = 'Crear mesa privada';
 
   if (!session) {
-    toastLobby('No se ha podido abrir la sala online. Revisa tu conexión o juega en local.', 'error');
+    const why = lastError && lastError.message === 'sin-servidor'
+      ? 'El servidor local no responde. ¿Sigue abierto el terminal con "npm start"?'
+      : 'No se ha podido abrir la sala. Revisa tu conexión o juega en local.';
+    toastLobby(why, 'error');
     table.destroy();
     state.table = null;
     return;
@@ -251,9 +267,9 @@ async function joinRoom() {
     status.textContent = 'El código tiene 4 letras.';
     return;
   }
-  if (!peerAvailable()) {
+  if (!canGoOnline()) {
     status.className = 'status error';
-    status.textContent = 'No se ha podido cargar la conexión P2P. Prueba a recargar la página.';
+    status.textContent = 'No hay forma de conectar: ni servidor local ni WebRTC. Prueba a recargar la página.';
     return;
   }
   status.className = 'status loading';
@@ -264,7 +280,8 @@ async function joinRoom() {
     code,
     name: state.profile.name,
     avatar: state.profile.avatar,
-    playerId: state.profile.id
+    playerId: state.profile.id,
+    transport: transport()
   });
   try {
     await session.open();
@@ -278,6 +295,7 @@ async function joinRoom() {
     status.textContent =
       msg === 'no-room' ? 'No hay ninguna mesa con ese código (o el anfitrión ha cerrado la pestaña).'
       : msg === 'timeout' ? 'La conexión ha tardado demasiado. Inténtalo otra vez.'
+      : msg === 'sin-servidor' ? 'El servidor local no responde. ¿Sigue abierto el terminal con "npm start"?'
       : 'No se ha podido entrar: ' + (msg || 'error desconocido');
   } finally {
     $('btnJoin').disabled = false;
@@ -334,7 +352,7 @@ function bindGameControls(session, code) {
 
   $('roomChip').onclick = async () => {
     if (code === 'LOCAL') return;
-    const url = `${location.origin}${location.pathname}?sala=${code}`;
+    const url = `${inviteOrigin()}${location.pathname}?sala=${code}`;
     const text = `Te invito a jugar al Texas Hold'em. Sala ${code}: ${url}`;
     try {
       if (navigator.share) await navigator.share({ title: "Hold'em Club", text, url });
@@ -423,6 +441,78 @@ function leaveGame() {
   $('game').classList.remove('active');
   $('lobby').classList.add('active');
   $('sidePanel').classList.remove('open');
+  detectLan();
+}
+
+/** Origen que sirve para tus amigos: en local, la IP de la wifi (no "localhost"). */
+function inviteOrigin() {
+  const lan = state.lan;
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (lan && lan.addresses.length && isLocalHost) {
+    return `http://${lan.addresses[0]}:${lan.port}`;
+  }
+  return location.origin;
+}
+
+/** Aviso de red local: dice exactamente que direccion compartir. */
+async function detectLan() {
+  state.lan = await lanAvailable();
+  const banner = $('lanBanner');
+  if (!state.lan) {
+    banner.hidden = true;
+    return;
+  }
+  const url = inviteOrigin();
+  banner.hidden = false;
+  banner.innerHTML = `<span><b>Red local activa.</b> Tus amigos entran desde su móvil o portátil abriendo:</span>
+    <code id="lanUrl" title="Copiar">${url}</code>`;
+  $('lanUrl').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      $('lanUrl').textContent = '¡copiado!';
+      setTimeout(() => ($('lanUrl').textContent = url), 1200);
+    } catch (_) {}
+  };
+  if (!state.lan.addresses.length) {
+    banner.innerHTML = '<span><b>Red local activa</b>, pero no se ha encontrado ninguna IP de wifi. ' +
+      'Comprueba que el ordenador está conectado a la red.</span>';
+  }
+  refreshLanRooms();
+}
+
+/** Mesas abiertas ahora mismo en esta wifi, para entrar sin teclear el código. */
+async function refreshLanRooms() {
+  if (!state.lan) return;
+  const box = $('lanRooms');
+  const list = await lanRooms();
+  if (!list.length) {
+    box.hidden = true;
+  } else {
+    box.hidden = false;
+    box.innerHTML = '<span class="field-label">Mesas abiertas en tu red</span>' + list
+      .map((r) => `<button type="button" class="lan-room" data-code="${r.code}">
+          <span class="r-code">${r.code}</span>
+          <span class="r-host">mesa de ${escapeHtml(r.host)}</span>
+          <span class="r-players">${r.players} 👤</span>
+        </button>`)
+      .join('');
+    box.querySelectorAll('.lan-room').forEach((b) => {
+      b.onclick = () => {
+        $('joinCode').value = b.dataset.code;
+        joinRoom();
+      };
+    });
+  }
+  clearTimeout(refreshLanRooms._t);
+  if ($('lobby').classList.contains('active')) {
+    refreshLanRooms._t = setTimeout(refreshLanRooms, 4000);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
 }
 
 // ---------------------------------------------------------------------- init
@@ -431,6 +521,7 @@ loadStored();
 applySettings();
 buildAvatarPicker();
 bindLobby();
+detectLan();
 
 // El audio del navegador necesita un gesto del usuario para arrancar.
 const unlock = () => {

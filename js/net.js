@@ -4,6 +4,7 @@
 // No hay servidor que desplegar: solo el broker publico para el saludo inicial.
 
 import { Emitter, Table } from './table.js';
+import { LanHostLink, LanGuestLink } from './lan.js';
 
 const PREFIX = 'holdemclub-es-';
 const PROTOCOL = 1;
@@ -67,16 +68,34 @@ export class LocalSession extends Emitter {
 
 /** Sesion de anfitrion: igual que la local pero ademas sirve a los invitados. */
 export class HostSession extends LocalSession {
-  constructor(table, youId, code) {
+  constructor(table, youId, code, transport = 'peer') {
     super(table, youId);
     this.online = true;
     this.code = code;
+    this.transport = transport;
     this.peer = null;
-    this.conns = new Map();  // playerId -> DataConnection
+    this.link = null;
+    this.conns = new Map();  // playerId -> conexion (WebRTC o LAN)
     this.table.on('update', (events) => this.broadcast(events));
   }
 
   async open() {
+    if (this.transport === 'lan') return this.openLan();
+    return this.openPeer();
+  }
+
+  /** Centralita local: los invitados llegan por el servidor de la wifi. */
+  async openLan() {
+    this.link = new LanHostLink(this.code, {
+      peerId: this.you,
+      name: (this.table.game.playerById(this.you) || {}).name || 'Anfitrion',
+      onConnection: (conn) => this.accept(conn)
+    });
+    await this.link.open();
+    return this.code;
+  }
+
+  async openPeer() {
     if (!peerAvailable()) throw new Error('PeerJS no disponible');
     return new Promise((resolve, reject) => {
       const peer = new window.Peer(PREFIX + this.code, peerOptions());
@@ -198,14 +217,18 @@ export class HostSession extends LocalSession {
     if (this.peer) {
       try { this.peer.destroy(); } catch (_) {}
     }
+    if (this.link) {
+      try { this.link.close(); } catch (_) {}
+    }
     super.close();
   }
 }
 
 /** Sesion de invitado: manda acciones y pinta lo que diga el anfitrion. */
 export class GuestSession extends Emitter {
-  constructor({ code, name, avatar, playerId }) {
+  constructor({ code, name, avatar, playerId, transport = 'peer' }) {
     super();
+    this.transport = transport;
     this.code = code.toUpperCase();
     this.name = name;
     this.avatar = avatar;
@@ -220,6 +243,68 @@ export class GuestSession extends Emitter {
   }
 
   async open() {
+    if (this.transport === 'lan') return this.openLan();
+    return this.openPeer();
+  }
+
+  /** Entra por el servidor de la wifi local. */
+  async openLan() {
+    const link = new LanGuestLink(this.code, { peerId: this.you, name: this.name });
+    this.link = link;
+    await link.connect();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timeout')), 10000);
+      link.on('data', (msg) => {
+        const done = this.handleMessage(msg, (v) => {
+          clearTimeout(timeout);
+          resolve(v);
+        }, (e) => {
+          clearTimeout(timeout);
+          reject(e);
+        });
+        return done;
+      });
+      link.on('close', () => {
+        if (!this.closed) this.emit('hostgone');
+      });
+      link.on('reconnecting', () => this.emit('netstatus', 'reconectando'));
+      this.conn = {
+        open: true,
+        send: (m) => link.send(m),
+        close: () => link.close()
+      };
+      link.send({
+        type: 'join',
+        protocol: PROTOCOL,
+        playerId: this.you,
+        name: this.name,
+        avatar: this.avatar
+      });
+      this.startPing();
+    });
+  }
+
+  /** Reparte los mensajes del anfitrion. Comun a WebRTC y LAN. */
+  handleMessage(msg, resolve, reject) {
+    if (!msg) return;
+    if (msg.type === 'accepted') {
+      this._resolved = true;
+      this.you = msg.playerId;
+      resolve(msg);
+    } else if (msg.type === 'rejected') {
+      reject(new Error(msg.reason || 'Rechazado'));
+    } else if (msg.type === 'state') {
+      this.lastView = msg.view;
+      this.emit('state', msg.view, msg.events || []);
+    } else if (msg.type === 'pong') {
+      this.latency = Date.now() - msg.at;
+      this.emit('latency', this.latency);
+    } else if (msg.type === 'closed') {
+      this.emit('hostgone');
+    }
+  }
+
+  async openPeer() {
     if (!peerAvailable()) throw new Error('PeerJS no disponible');
     return new Promise((resolve, reject) => {
       const peer = new window.Peer(null, peerOptions());
@@ -241,26 +326,15 @@ export class GuestSession extends Emitter {
           });
           this.startPing();
         });
-        conn.on('data', (msg) => {
-          if (!msg) return;
-          if (msg.type === 'accepted') {
+        conn.on('data', (msg) =>
+          this.handleMessage(msg, (v) => {
             clearTimeout(timeout);
-            this._resolved = true;
-            this.you = msg.playerId;
-            resolve(msg);
-          } else if (msg.type === 'rejected') {
+            resolve(v);
+          }, (e) => {
             clearTimeout(timeout);
-            fail(new Error(msg.reason || 'Rechazado'));
-          } else if (msg.type === 'state') {
-            this.lastView = msg.view;
-            this.emit('state', msg.view, msg.events || []);
-          } else if (msg.type === 'pong') {
-            this.latency = Date.now() - msg.at;
-            this.emit('latency', this.latency);
-          } else if (msg.type === 'closed') {
-            this.emit('hostgone');
-          }
-        });
+            fail(e);
+          })
+        );
         conn.on('close', () => {
           if (!this.closed) this.emit('hostgone');
         });
@@ -317,6 +391,7 @@ export class GuestSession extends Emitter {
     this.closed = true;
     clearInterval(this._pingTimer);
     try { if (this.conn) this.conn.close(); } catch (_) {}
+    try { if (this.link) this.link.close(); } catch (_) {}
     try { if (this.peer) this.peer.destroy(); } catch (_) {}
   }
 }

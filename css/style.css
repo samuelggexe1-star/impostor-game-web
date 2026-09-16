@@ -273,6 +273,42 @@ input[type="range"]::-moz-range-thumb {
 .status.ok { color: var(--green); }
 .status.loading { color: var(--gold); }
 
+.lan-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 12px 16px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, rgba(53, 208, 127, .16), rgba(53, 208, 127, .05));
+  border: 1px solid rgba(53, 208, 127, .38);
+  font-size: .9rem;
+}
+.lan-banner b { color: var(--green); }
+.lan-banner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 9px;
+  color: var(--gold-soft);
+  cursor: pointer;
+}
+.lan-banner code:hover { border-color: var(--gold); }
+
+.lan-rooms { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.lan-room {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .2s ease, background .2s ease, transform .12s ease;
+}
+.lan-room:hover { border-color: var(--gold); background: rgba(246, 196, 83, .1); transform: translateY(-1px); }
+.lan-room .r-code { font-weight: 800; letter-spacing: .16em; color: var(--gold); }
+.lan-room .r-host { flex: 1; color: var(--muted); font-size: .85rem; }
+.lan-room .r-players { font-size: .8rem; color: var(--text); }
+
 .lobby-features {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px;
 }
@@ -388,6 +424,13 @@ input[type="range"]::-moz-range-thumb {
 .pot-amount.bump { transform: scale(1.14); }
 .pot-label { font-size: .62rem; letter-spacing: .16em; color: var(--muted); }
 .pot-amount b { color: var(--gold); font-size: clamp(.95rem, 2.2vw, 1.3rem); font-variant-numeric: tabular-nums; }
+/* Lo apostado en esta calle todavia esta delante de cada jugador, no en el bote. */
+.pot-pending {
+  color: var(--muted);
+  font-size: .78em;
+  font-variant-numeric: tabular-nums;
+}
+.pot-pending:empty { display: none; }
 .side-pots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .side-pot {
   font-size: .68rem; color: var(--muted);
@@ -509,7 +552,8 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   transform: scale(1.05);
 }
 .seat.you .seat-body { border-color: rgba(90, 169, 255, .55); }
-.seat.you .seat-tag { top: auto; bottom: -7px; }
+/* En tu asiento la chapa va al costado: arriba estan tus cartas y abajo la barra. */
+.seat.you .seat-tag { top: 50%; right: -9px; bottom: auto; transform: translate(50%, -50%); }
 .seat.winner .seat-body {
   border-color: var(--gold);
   animation: winnerGlow 1s ease-in-out infinite alternate;
@@ -522,6 +566,7 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .avatar-wrap { position: relative; width: clamp(34px, 4.4vw, 46px); height: clamp(34px, 4.4vw, 46px); flex: none; }
 .avatar {
   position: absolute; inset: 0;
+  z-index: 1;
   border-radius: 50%;
   display: grid; place-items: center;
   font-size: clamp(1.1rem, 2.3vw, 1.5rem);
@@ -535,9 +580,18 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   75% { transform: translateX(3px) rotate(4deg); }
 }
 
-.timer-ring { position: absolute; inset: -4px; transform: rotate(-90deg); opacity: 0; transition: opacity .25s ease; }
+/* El anillo rodea al avatar por fuera y va por delante: el avatar es opaco. */
+.timer-ring {
+  position: absolute; inset: -6px;
+  z-index: 3;
+  transform: rotate(-90deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6));
+}
 .seat.acting .timer-ring { opacity: 1; }
-.timer-ring circle { fill: none; stroke-width: 3.5; }
+.timer-ring circle { fill: none; stroke-width: 4; }
 .timer-ring .track { stroke: rgba(255, 255, 255, .12); }
 .timer-ring .bar { stroke: var(--green); stroke-linecap: round; transition: stroke .3s ease; }
 .timer-ring.warn .bar { stroke: var(--gold); }
@@ -921,7 +975,43 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 
 @media (max-width: 900px) {
   .lobby-grid { grid-template-columns: 1fr; }
-  .lobby-features { grid-template-columns: 1fr; }
+  .lan-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 12px 16px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, rgba(53, 208, 127, .16), rgba(53, 208, 127, .05));
+  border: 1px solid rgba(53, 208, 127, .38);
+  font-size: .9rem;
+}
+.lan-banner b { color: var(--green); }
+.lan-banner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 9px;
+  color: var(--gold-soft);
+  cursor: pointer;
+}
+.lan-banner code:hover { border-color: var(--gold); }
+
+.lan-rooms { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.lan-room {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .2s ease, background .2s ease, transform .12s ease;
+}
+.lan-room:hover { border-color: var(--gold); background: rgba(246, 196, 83, .1); transform: translateY(-1px); }
+.lan-room .r-code { font-weight: 800; letter-spacing: .16em; color: var(--gold); }
+.lan-room .r-host { flex: 1; color: var(--muted); font-size: .85rem; }
+.lan-room .r-players { font-size: .8rem; color: var(--text); }
+
+.lobby-features { grid-template-columns: 1fr; }
   .action-bar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .action-bar > * { min-width: 0; }
   .action-left { flex-direction: column; align-items: stretch; gap: 6px; }

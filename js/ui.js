@@ -59,6 +59,7 @@ export class TableUI {
       seats: $('seats'),
       board: $('board'),
       potAmount: $('potAmount'),
+      potPending: $('potPending'),
       potWrap: $('potWrap'),
       potChips: $('potChips'),
       sidePots: $('sidePots'),
@@ -124,7 +125,7 @@ export class TableUI {
   point(angle, scale = 1) {
     const w = this.el.felt ? this.el.felt.clientWidth : 900;
     const rx = w < 620 ? 33 : w < 860 ? 40 : 45;
-    const ry = w < 620 ? 41 : 43;
+    const ry = w < 620 ? 39 : 40;
     return ellipsePoint(angle, scale, rx, ry);
   }
 
@@ -359,7 +360,7 @@ export class TableUI {
     // --- boton del crupier, ligeramente al lado para no tapar las cartas
     const dealerSeat = this.seatEls.get(view.button);
     if (view.button >= 0 && dealerSeat && view.players[view.button]) {
-      const pt = this.point(dealerSeat.angle + 15, 0.87);
+      const pt = this.point(dealerSeat.angle + 11, 0.94);
       this.el.dealer.hidden = false;
       this.el.dealer.style.left = pt.x.toFixed(2) + '%';
       this.el.dealer.style.top = pt.y.toFixed(2) + '%';
@@ -371,8 +372,8 @@ export class TableUI {
     this.renderBoard(view);
 
     // --- bote
-    const potNow = view.potTotal + view.streetBets;
-    const potPrev = prev ? prev.potTotal + prev.streetBets : 0;
+    const potNow = view.potTotal;
+    const potPrev = prev ? prev.potTotal : 0;
     if (potNow !== potPrev) {
       tweenNumber(this.el.potAmount, potPrev, potNow, 500);
       if (potNow > potPrev) {
@@ -382,7 +383,10 @@ export class TableUI {
     } else {
       this.el.potAmount.textContent = potNow.toLocaleString('es-ES');
     }
-    this.renderPotChips(potNow);
+    this.el.potPending.textContent = view.streetBets > 0
+      ? `+${view.streetBets.toLocaleString('es-ES')}`
+      : '';
+    this.renderPotChips(potNow + view.streetBets);
     this.renderSidePots(view);
 
     // --- etiqueta de calle
