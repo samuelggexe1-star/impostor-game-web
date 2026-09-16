@@ -435,6 +435,10 @@ export function runHostCommand(table, requesterId, cmd, payload = {}, hostId = n
       if (!isHost) return { ok: false };
       table.pause(!table.paused);
       return { ok: true };
+    case 'resume':
+      if (!isHost) return { ok: false };
+      table.resume();
+      return { ok: true };
     case 'addBot':
       if (!isHost) return { ok: false };
       table.addBot(payload.style);

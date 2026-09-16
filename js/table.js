@@ -85,6 +85,8 @@ export class Table extends Emitter {
     this.levelStartedAt = 0;
     this.lastResultAt = 0;
     this.paused = false;
+    this.lastProgress = Date.now();
+    this.watchdog = null;
   }
 
   // -------------------------------------------------------------- utilidades
@@ -112,6 +114,8 @@ export class Table extends Emitter {
   destroy() {
     this.destroyed = true;
     this.running = false;
+    if (this.watchdog) clearInterval(this.watchdog);
+    this.watchdog = null;
     this.clearTimers();
   }
 
@@ -194,9 +198,14 @@ export class Table extends Emitter {
     p.away = !!away;
     p.sittingOut = !!away;
     this.publish();
-    // Si se marcha cuando le tocaba hablar, resolvemos su turno ya en vez de
-    // tener a los demas esperando a que se agote el reloj.
-    if (p.away && this.game.toAct === p.seat) this.forceAction(p, 'ausente');
+    if (p.away) {
+      // Si se marcha cuando le tocaba hablar, resolvemos su turno ya en vez de
+      // tener a los demas esperando a que se agote el reloj.
+      if (this.game.toAct === p.seat) this.forceAction(p, 'ausente');
+    } else {
+      // Al volver puede que la mesa estuviera parada por falta de jugadores.
+      this.maybeStart();
+    }
   }
 
   rebuy(id, amount) {
@@ -250,7 +259,100 @@ export class Table extends Emitter {
     if (this.running) return;
     this.running = true;
     this.levelStartedAt = Date.now();
+    this.touch();
+    this.startWatchdog();
     this.maybeStart();
+  }
+
+  /** Marca que la partida ha avanzado. Lo usa el vigilante para detectar atascos. */
+  touch() {
+    this.lastProgress = Date.now();
+  }
+
+  /**
+   * Una mesa parada arruina la partida a todos, y basta un temporizador perdido
+   * (pestaña dormida, error puntual) para que pase. Cada pocos segundos miramos
+   * si la mesa deberia estar avanzando y no lo hace, y la empujamos.
+   */
+  startWatchdog() {
+    if (this.watchdog) return;
+    this.watchdog = setInterval(() => {
+      try {
+        this.checkStuck();
+      } catch (err) {
+        console.error('[vigilante]', err);
+      }
+    }, 3000);
+    if (this.watchdog.unref) this.watchdog.unref();
+  }
+
+  checkStuck() {
+    if (!this.running || this.paused || this.destroyed) return;
+    const g = this.game;
+    const parado = Date.now() - (this.lastProgress || 0);
+
+    // a) No hay mano en curso pero hay gente de sobra para jugar.
+    if (!g.inHand() && g.eligibleForHand().length >= 2 && parado > 8000) {
+      this.recover('la mesa llevaba parada, empezamos mano');
+      this.beginHand();
+      return;
+    }
+    // b) Mano viva, nadie tiene el turno y no hay nada pendiente.
+    if (g.inHand() && g.toAct < 0 && !g.pending && parado > 8000) {
+      this.recover('nadie tenía el turno');
+      this.step();
+      return;
+    }
+    // c) Le toca a alguien pero su reloj venció hace rato: se perdió el aviso.
+    if (g.toAct >= 0 && this.deadline && Date.now() > this.deadline + 6000) {
+      const p = g.seats[g.toAct];
+      if (p) {
+        this.recover('se perdió el reloj de un turno');
+        this.forceAction(p, 'tiempo');
+      }
+    }
+  }
+
+  /**
+   * Recoloca una mano que se quedo sin turno ni paso pendiente.
+   * @returns {boolean} true si la mano vuelve a ser jugable.
+   */
+  repair() {
+    const g = this.game;
+    if (!g.inHand()) return false;
+    if (g.pending || g.toAct >= 0) return true;
+
+    if (g.contenders().length <= 1) {
+      g.collectBets();
+      g.pending = { type: 'uncontested' };
+      return true;
+    }
+    if (g.bettingClosed()) {
+      g.closeStreet();
+      return true;
+    }
+    const siguiente = g.nextToAct(g.button);
+    if (siguiente >= 0) {
+      g.toAct = siguiente;
+      return true;
+    }
+    g.closeStreet();
+    return true;
+  }
+
+  recover(motivo) {
+    this.pushEvent({ t: 'recover', motivo });
+    this.system('La mesa se había quedado parada y se ha reanudado sola.');
+    console.warn('[vigilante] ' + motivo);
+  }
+
+  /** Empujon manual, por si el anfitrion ve la mesa parada. */
+  resume() {
+    this.paused = false;
+    this.touch();
+    if (this.game.inHand()) this.step();
+    else this.maybeStart();
+    this.publish();
   }
 
   pause(v) {
@@ -276,6 +378,7 @@ export class Table extends Emitter {
       if (p.status === 'waiting') p.status = 'active';
       p.timeBank = this.config.timeBankSeconds;
     }
+    this.touch();
     const res = this.game.startHand();
     if (!res.ok) {
       this.publish();
@@ -304,6 +407,7 @@ export class Table extends Emitter {
   /** Motor de estados: decide que toca hacer ahora (avanzar calle, pedir accion, repartir). */
   step() {
     if (!this.running || this.paused || this.destroyed) return;
+    this.touch();
     this.clearTurnTimer();
     const g = this.game;
 
@@ -330,6 +434,14 @@ export class Table extends Emitter {
     }
 
     if (g.toAct < 0) {
+      // Estado imposible: mano viva, nadie con el turno y nada pendiente.
+      // En vez de quedarnos mirando, reconstruimos a quien le toca.
+      if (!this._reparando && this.repair()) {
+        this._reparando = true;
+        this.step();
+        this._reparando = false;
+        return;
+      }
       this.publish();
       return;
     }
@@ -412,6 +524,7 @@ export class Table extends Emitter {
     if (!p || g.toAct !== p.seat) return { ok: false, reason: 'not-your-turn' };
     const res = g.act(id, action, amount);
     if (!res.ok) return res;
+    this.touch();
     this.clearTurnTimer();
     this.publish();
     this.step();

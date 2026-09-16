@@ -6,8 +6,8 @@ import { evaluate } from './evaluator.js';
 import { equity } from './odds.js';
 import { sfx } from './sound.js';
 import {
-  motion, ms, wait, rectIn, flyTo, floatText, makeChipEl, chipBreakdown,
-  initConfetti, confettiBurst, coinRain, tweenNumber
+  motion, ms, wait, rectIn, flyTo, floatText, makeChipEl, chipBreakdown, chipColor,
+  initConfetti, confettiBurst, coinRain, tweenNumber, animateOnce
 } from './fx.js';
 
 // Los asientos se reparten sobre una elipse. El jugador local siempre abajo
@@ -66,6 +66,8 @@ export class TableUI {
       stageLabel: $('stageLabel'),
       dealer: $('dealerButton'),
       fx: $('fxLayer'),
+      spotlight: $('spotlight'),
+      flash: $('flash'),
       confetti: $('confetti'),
       banner: $('banner'),
       roomCode: $('roomCode'),
@@ -204,6 +206,7 @@ export class TableUI {
     const total = Math.max(order.length, 2);
     order.forEach((seatIndex, i) => {
       const S = this.ensureSeat(seatIndex);
+      S.orden = i;
       const angle = seatAngle(i, total);
       const pt = this.point(angle);
       S.angle = angle;
@@ -363,16 +366,37 @@ export class TableUI {
     const order = this.layoutSeats(view);
     for (const seatIndex of order) this.renderSeat(seatIndex, view.players[seatIndex], view);
 
-    // --- boton del crupier, ligeramente al lado para no tapar las cartas
+    // --- boton del crupier: se coloca midiendo la placa de su jugador, para
+    // que quede siempre pegado a el y no flotando en medio del tapete.
     const dealerSeat = this.seatEls.get(view.button);
     if (view.button >= 0 && dealerSeat && view.players[view.button]) {
-      // Bastante girado para no pisar la chapa de ciega, que va arriba a la derecha.
-      const pt = this.point(dealerSeat.angle + 17, 0.93);
-      this.el.dealer.hidden = false;
-      this.el.dealer.style.left = pt.x.toFixed(2) + '%';
-      this.el.dealer.style.top = pt.y.toFixed(2) + '%';
+      const felt = this.el.felt.getBoundingClientRect();
+      const placa = dealerSeat.root.getBoundingClientRect();
+      if (felt.width && placa.width) {
+        const sx = placa.left - felt.left + placa.width / 2;
+        const sy = placa.top - felt.top + placa.height / 2;
+        const dx = felt.width / 2 - sx;
+        const dy = felt.height / 2 - sy;
+        const largo = Math.hypot(dx, dy) || 1;
+        const px = sx + (dx / largo) * (placa.width * 0.6);
+        const py = sy + (dy / largo) * (placa.height * 1.1);
+        this.el.dealer.hidden = false;
+        this.el.dealer.style.left = ((px / felt.width) * 100).toFixed(2) + '%';
+        this.el.dealer.style.top = ((py / felt.height) * 100).toFixed(2) + '%';
+      }
     } else {
       this.el.dealer.hidden = true;
+    }
+
+    // --- foco sobre quien habla
+    const enTurno = this.seatEls.get(view.toAct);
+    if (enTurno && view.toAct >= 0) {
+      const pt = this.point(enTurno.angle, 0.82);
+      this.el.spotlight.style.left = pt.x.toFixed(2) + '%';
+      this.el.spotlight.style.top = pt.y.toFixed(2) + '%';
+      this.el.spotlight.classList.add('on');
+    } else {
+      this.el.spotlight.classList.remove('on');
     }
 
     // --- board
@@ -459,13 +483,25 @@ export class TableUI {
     this.renderHole(S, p, view);
 
     if (p.bet > 0) {
-      S.bet.innerHTML = `<span class="mini-chips">${chipBreakdown(p.bet)
-        .slice(0, 3)
-        .map(() => '<i class="mini-chip"></i>')
-        .join('')}</span>${p.bet.toLocaleString('es-ES')}`;
+      if (S.betAmount !== p.bet) {
+        const fichas = chipBreakdown(p.bet);
+        S.bet.innerHTML = `<span class="chip-stack">${fichas
+          .map((v, i) => `<i style="--i:${i}; --chip-body:${chipColor(v).body}; --chip-ring:${chipColor(v).ring}"></i>`)
+          .join('')}</span><b>${p.bet.toLocaleString('es-ES')}</b>`;
+        const subio = (S.betAmount || 0) < p.bet;
+        S.betAmount = p.bet;
+        if (subio && !motion.reduced) {
+          animateOnce(
+            S.bet,
+            [{ transform: 'translate(-50%,-50%) scale(.6)' }, { transform: 'translate(-50%,-50%) scale(1.18)', offset: 0.6 }, { transform: 'translate(-50%,-50%) scale(1)' }],
+            { duration: ms(420), easing: 'cubic-bezier(.2,1.5,.4,1)' }
+          );
+        }
+      }
       S.bet.classList.add('show');
     } else {
       S.bet.classList.remove('show');
+      S.betAmount = 0;
     }
 
     if (p.handName && (view.stage === 'showdown' || view.stage === 'handEnd')) {
@@ -507,10 +543,9 @@ export class TableUI {
       for (let i = 0; i < want; i++) {
         const card = p.hole ? p.hole[i] : null;
         const el = this.makeCard(card, !faceUp);
-        el.classList.add('dealing');
-        el.style.animationDelay = ms(i * 110) + 'ms';
         S.cards.appendChild(el);
         S.cardEls.push(el);
+        this.dealFrom(el, S.orden * 2 + i);
       }
     } else {
       // Mismo numero de cartas: solo cambia el reverso por la cara (showdown).
@@ -522,6 +557,38 @@ export class TableUI {
     }
     S.sig = sig;
     this.highlightBest(S, p, view);
+  }
+
+  /**
+   * Manda la carta volando desde el centro de la mesa hasta su sitio.
+   * Se anima el elemento real (no un fantasma), conservando el abanico que
+   * le pone el CSS para que no pegue un salto al terminar.
+   */
+  dealFrom(el, orden = 0) {
+    if (motion.reduced) return;
+    requestAnimationFrame(() => {
+      const felt = this.el.felt.getBoundingClientRect();
+      const destino = el.getBoundingClientRect();
+      if (!destino.width) return;
+      const dx = felt.left + felt.width / 2 - (destino.left + destino.width / 2);
+      const dy = felt.top + felt.height * 0.34 - (destino.top + destino.height / 2);
+      const giro = -25 + Math.random() * 50;
+      const finalT = getComputedStyle(el).transform;
+      animateOnce(
+        el,
+        [
+          { transform: `translate(${dx}px, ${dy}px) rotate(${giro}deg) scale(.45)`, opacity: 0, offset: 0 },
+          { transform: `translate(${dx * 0.25}px, ${dy * 0.25}px) rotate(${giro * 0.3}deg) scale(.9)`, opacity: 1, offset: 0.65 },
+          { transform: finalT === 'none' ? 'none' : finalT, opacity: 1 }
+        ],
+        {
+          duration: ms(480),
+          delay: ms(90 * orden),
+          easing: 'cubic-bezier(.18,.85,.25,1)',
+          fill: 'backwards'
+        }
+      );
+    });
   }
 
   highlightBest(S, p, view) {
@@ -546,15 +613,27 @@ export class TableUI {
     }
     for (let i = this.boardEls.length; i < board.length; i++) {
       const el = this.makeCard(board[i], true);
-      el.classList.add('dealing');
-      el.style.animationDelay = ms((i % 3) * 130) + 'ms';
       this.el.board.appendChild(el);
       this.boardEls.push(el);
-      const delay = ms(180 + (i % 3) * 130);
+      const escalon = i - (this.prev ? this.prev.board.length : 0);
+      const retardo = ms(120 + Math.max(0, escalon) * 190);
+      if (!motion.reduced) {
+        animateOnce(
+          el,
+          [
+            { transform: 'translateY(-46px) rotate(-12deg) scale(.7)', opacity: 0 },
+            { transform: 'translateY(6px) rotate(2deg) scale(1.04)', opacity: 1, offset: 0.7 },
+            { transform: 'none', opacity: 1 }
+          ],
+          { duration: ms(420), delay: retardo, easing: 'cubic-bezier(.2,.9,.24,1)', fill: 'backwards' }
+        );
+      }
       setTimeout(() => {
         el.classList.remove('face-down');
+        el.classList.add('shine');
+        setTimeout(() => el.classList.remove('shine'), ms(900));
         sfx.flip();
-      }, delay);
+      }, retardo + ms(260));
     }
     // Resalta las cartas del board que forman la mano ganadora.
     const winners = view.results ? view.results.pots.flatMap((p) => p.winners) : [];
@@ -857,6 +936,9 @@ export class TableUI {
         case 'rebuy':
           sfx.chip(3);
           break;
+        case 'recover':
+          this.toast('La mesa se había quedado parada y ha seguido sola');
+          break;
         case 'busted':
           if (this.me() && ev.seat === this.me().seat) this.banner('Sin fichas', 'Pide una recarga para seguir', 3000);
           break;
@@ -909,7 +991,26 @@ export class TableUI {
     if (allIn) {
       const rect = rectIn(S.root, this.el.fx);
       floatText(this.el.fx, rect, 'ALL-IN', 'loss');
+      this.flash('allin');
+      animateOnce(
+        S.root,
+        [{ transform: 'translate(-50%,-50%) scale(1)' },
+         { transform: 'translate(-50%,-50%) scale(1.14)', offset: 0.35 },
+         { transform: 'translate(-50%,-50%) scale(1)' }],
+        { duration: ms(650), easing: 'cubic-bezier(.2,1.6,.4,1)' }
+      );
     }
+  }
+
+  /** Fogonazo en toda la mesa para los momentos gordos. */
+  flash(tipo = 'win') {
+    if (motion.reduced || !this.el.flash) return;
+    const el = this.el.flash;
+    el.className = 'table-flash ' + tipo;
+    // reinicia la animacion aunque se encadenen dos seguidas
+    void el.offsetWidth;
+    el.classList.add('go');
+    setTimeout(() => el.classList.remove('go'), ms(700));
   }
 
   /** Las apuestas de la calle vuelan al centro cuando se cierra la ronda. */
@@ -953,7 +1054,18 @@ export class TableUI {
         const S = this.seatEls.get(w.seat);
         if (!S) continue;
         const to = rectIn(S.root, this.el.fx);
-        this.flyChips(potRect, to, w.amount, 4);
+        this.flyChips(potRect, to, w.amount, 5);
+        if (!motion.reduced) {
+          setTimeout(() => {
+            animateOnce(
+              S.root,
+              [{ transform: 'translate(-50%,-50%) scale(1)' },
+               { transform: 'translate(-50%,-50%) scale(1.16)', offset: 0.4 },
+               { transform: 'translate(-50%,-50%) scale(1)' }],
+              { duration: ms(700), easing: 'cubic-bezier(.2,1.5,.4,1)' }
+            );
+          }, ms(430));
+        }
         setTimeout(() => {
           floatText(this.el.fx, to, '+' + w.amount.toLocaleString('es-ES'));
           sfx.chip(3);
@@ -972,10 +1084,13 @@ export class TableUI {
     this.banner(iWon ? '¡Ganas el bote!' : 'Fin de la mano', bestLine, 3200);
     if (iWon) {
       sfx.win();
+      this.flash('win');
       if (this.settings.confetti) {
         const r = this.el.confetti.getBoundingClientRect();
-        confettiBurst(r.width / 2, r.height * 0.45, 110, 1.15);
-        coinRain(34);
+        confettiBurst(r.width / 2, r.height * 0.45, 130, 1.25);
+        setTimeout(() => confettiBurst(r.width * 0.25, r.height * 0.5, 70, 1), ms(220));
+        setTimeout(() => confettiBurst(r.width * 0.75, r.height * 0.5, 70, 1), ms(380));
+        coinRain(46);
       }
     } else if (me && me.status !== 'folded' && me.holeCount > 0) {
       sfx.lose();

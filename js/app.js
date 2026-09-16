@@ -497,6 +497,10 @@ function bindGameControls(session, code) {
     $('btnPause').textContent = state.table && state.table.paused ? 'Pausar' : 'Reanudar';
   };
   $('btnRebuy').onclick = () => session.command('rebuy', {});
+  $('btnResume').onclick = () => {
+    session.command('resume', {});
+    if (state.ui) state.ui.toast('Reanudando la mesa…');
+  };
 
   window.addEventListener('beforeunload', (e) => {
     if (session.isHost && session.online) {

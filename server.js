@@ -226,6 +226,7 @@ class Room {
     if (!isOwner) return;
     if (cmd === 'addBot') t.addBot(payload.style);
     else if (cmd === 'pause') t.pause(!t.paused);
+    else if (cmd === 'resume') t.resume();
     else if (cmd === 'start') t.start();
     else if (cmd === 'kick') {
       const p = t.game.seats[payload.seat];

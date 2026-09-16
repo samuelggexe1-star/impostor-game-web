@@ -10,6 +10,20 @@ export const motion = {
   }
 };
 
+/**
+ * Lanza una animacion y la suelta al acabar. Sin esto se acumulan cientos de
+ * animaciones terminadas a lo largo de una partida larga.
+ */
+export function animateOnce(el, keyframes, options) {
+  const anim = el.animate(keyframes, options);
+  anim.onfinish = () => {
+    try {
+      anim.cancel();
+    } catch (_) {}
+  };
+  return anim;
+}
+
 export function ms(v) {
   return Math.max(0, Math.round(v / (motion.speed || 1)));
 }
