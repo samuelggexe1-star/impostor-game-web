@@ -61,7 +61,7 @@ kbd {
   font-size: .82em;
 }
 
-.screen { display: none; height: 100dvh; }
+.screen { display: none; height: 100%; }
 .screen.active { display: flex; }
 
 /* ----------------------------------------------------------- botones ---- */
