@@ -1,37 +1,309 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Juego del Impostor</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="Texas Hold'em online para jugar con tus amigos: salas privadas con codigo, animaciones, chat y bots.">
+<title>Hold'em Club · Texas Hold'em con amigos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <div id="container">
-    <h1>🎭 Juego del Impostor</h1>
+<body data-felt="esmeralda">
 
-    <!-- Pantalla inicio -->
-    <div id="pantalla-inicio">
-      <input id="nombre" placeholder="Tu nombre">
-      <input id="sala" placeholder="Código de sala">
-      <input id="prompt" placeholder="Prompt para la ronda (host)">
-      <button id="btn-unirse">Unirse</button>
-      <button id="btn-prompt">Enviar prompt y nueva ronda</button>
-    </div>
-
-    <!-- Pantalla juego -->
-    <div id="pantalla-juego" class="oculto">
-      <h2 id="mensaje-rol"></h2>
-      <button id="btn-mostrar">Ver palabra</button>
-      <div id="palabra" class="oculto"></div>
-      <button id="btn-ocultar" class="oculto">Ocultar</button>
-      <button id="btn-nueva" class="oculto">Nueva ronda</button>
-    </div>
-
-    <div id="jugadores"></div>
+<!-- ============================ VESTIBULO ============================ -->
+<section id="lobby" class="screen active">
+  <div class="lobby-bg" aria-hidden="true">
+    <span class="bg-suit">♠</span><span class="bg-suit">♥</span>
+    <span class="bg-suit">♦</span><span class="bg-suit">♣</span>
   </div>
 
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="script.js"></script>
+  <div class="lobby-inner">
+    <header class="brand">
+      <div class="brand-cards" aria-hidden="true">
+        <div class="brand-card red">A<small>♥</small></div>
+        <div class="brand-card">K<small>♠</small></div>
+      </div>
+      <h1>Hold'em <span>Club</span></h1>
+      <p class="tagline">Texas Hold'em No Limit para jugar con tus amigos. Sala privada, código de 4 letras y a repartir.</p>
+    </header>
+
+    <div id="lanBanner" class="lan-banner" hidden></div>
+
+    <div class="lobby-grid">
+      <div class="panel identity">
+        <h2>Tu jugador</h2>
+        <label class="field">
+          <span>Nombre</span>
+          <input id="playerName" maxlength="16" placeholder="¿Cómo te llamas?" autocomplete="nickname">
+        </label>
+        <span class="field-label">Avatar</span>
+        <div id="avatarPicker" class="avatar-picker" role="radiogroup" aria-label="Elige avatar"></div>
+      </div>
+
+      <div class="panel play">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="create" role="tab">Crear mesa</button>
+          <button class="tab" data-tab="join" role="tab">Unirme</button>
+          <button class="tab" data-tab="solo" role="tab">Practicar</button>
+        </div>
+
+        <div class="tab-panel active" data-panel="create">
+          <div class="form-row">
+            <label class="field">
+              <span>Modo</span>
+              <select id="cfgMode">
+                <option value="cash">Cash · ciegas fijas</option>
+                <option value="torneo">Torneo · ciegas que suben</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Fichas iniciales</span>
+              <select id="cfgChips">
+                <option value="1000">1.000</option>
+                <option value="2000" selected>2.000</option>
+                <option value="5000">5.000</option>
+                <option value="10000">10.000</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="field">
+              <span>Ciegas</span>
+              <select id="cfgBlinds">
+                <option value="5,10">5 / 10</option>
+                <option value="10,20" selected>10 / 20</option>
+                <option value="25,50">25 / 50</option>
+                <option value="50,100">50 / 100</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Tiempo por turno</span>
+              <select id="cfgTurn">
+                <option value="15">15 s · rápido</option>
+                <option value="30" selected>30 s · normal</option>
+                <option value="60">60 s · tranquilo</option>
+                <option value="180">Sin prisa</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Rellenar con bots <em id="botCountLabel">2</em></span>
+            <input id="cfgBots" type="range" min="0" max="7" value="2">
+          </label>
+          <button id="btnCreate" class="btn primary big">Crear mesa privada</button>
+          <p class="hint">Se genera un código de 4 letras. Pásaselo a tus amigos y entran desde cualquier navegador.</p>
+        </div>
+
+        <div class="tab-panel" data-panel="join">
+          <label class="field">
+            <span>Código de la sala</span>
+            <input id="joinCode" class="code-input" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
+          </label>
+          <button id="btnJoin" class="btn primary big">Entrar en la mesa</button>
+          <div id="lanRooms" class="lan-rooms" hidden></div>
+          <p class="hint">Mantén abierta la pestaña de quien creó la mesa: es quien reparte.</p>
+          <div id="joinStatus" class="status"></div>
+        </div>
+
+        <div class="tab-panel" data-panel="solo">
+          <p class="hint">Partida local contra bots con personalidad propia. Ideal para probar la mesa o calentar.</p>
+          <label class="field">
+            <span>Rivales <em id="soloCountLabel">3</em></span>
+            <input id="soloBots" type="range" min="1" max="8" value="3">
+          </label>
+          <label class="field">
+            <span>Nivel de los bots</span>
+            <select id="soloStyle">
+              <option value="mixto" selected>Mezcla de estilos</option>
+              <option value="pescado">Pescados · flojos</option>
+              <option value="solido">Sólidos · equilibrados</option>
+              <option value="tiburon">Tiburones · duros</option>
+              <option value="maniaco">Maníacos · locura</option>
+            </select>
+          </label>
+          <button id="btnSolo" class="btn primary big">Jugar ahora</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lobby-features">
+      <div><b>Reparto real</b><span>Motor No Limit completo: side pots, all-in, subidas mínimas y desempates.</span></div>
+      <div><b>Sin servidor</b><span>Conexión directa entre navegadores. Tus partidas no pasan por ninguna base de datos.</span></div>
+      <div><b>Con chispa</b><span>Animaciones de reparto, fichas volando al bote, confeti, chat y emojis lanzados.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== MESA ============================== -->
+<section id="game" class="screen">
+  <header class="topbar">
+    <div class="top-left">
+      <button id="btnLeave" class="icon-btn" title="Salir de la mesa">←</button>
+      <div class="room-chip" id="roomChip" title="Copiar invitación">
+        <span class="room-label">SALA</span>
+        <span class="room-code" id="roomCode">----</span>
+        <span class="copy-hint">copiar</span>
+      </div>
+    </div>
+    <div class="top-center">
+      <div class="blinds-chip">
+        <span id="levelLabel">Ciegas</span>
+        <b id="blindsLabel">10 / 20</b>
+        <span id="levelTimer" class="level-timer"></span>
+      </div>
+      <div class="hand-chip">Mano <b id="handNumber">0</b></div>
+    </div>
+    <div class="top-right">
+      <span id="netStatus" class="net-status"></span>
+      <button id="btnSound" class="icon-btn" title="Sonido">🔊</button>
+      <button id="btnPanel" class="icon-btn" title="Chat y ajustes">☰</button>
+    </div>
+  </header>
+
+  <main class="table-area">
+    <div class="table-wrap">
+      <div class="table-felt" id="felt">
+        <div class="felt-glow"></div>
+        <div class="felt-logo">HOLD'EM<span>CLUB</span></div>
+
+        <div class="center-stack">
+          <div class="pot-wrap" id="potWrap">
+            <div class="pot-chips" id="potChips" aria-hidden="true"></div>
+            <div class="pot-amount"><span class="pot-label">BOTE</span><b id="potAmount">0</b><span id="potPending" class="pot-pending"></span></div>
+            <div class="side-pots" id="sidePots"></div>
+          </div>
+          <div class="board" id="board"></div>
+          <div class="stage-label" id="stageLabel"></div>
+        </div>
+
+        <div id="seats" class="seats"></div>
+        <div id="dealerButton" class="dealer-button" hidden>D</div>
+      </div>
+
+      <div id="banner" class="banner" hidden></div>
+      <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
+      <canvas id="confetti" class="confetti"></canvas>
+    </div>
+  </main>
+
+  <footer class="action-bar" id="actionBar">
+    <div class="action-left">
+      <div class="hand-hud" id="handHud" hidden>
+        <div class="hud-row"><span class="hud-label">Tu jugada</span><b id="hudHand">—</b></div>
+        <div class="hud-row equity" id="hudEquityRow" hidden>
+          <span class="hud-label">Ganas</span>
+          <div class="equity-bar"><i id="equityFill"></i></div>
+          <b id="hudEquity">—</b>
+        </div>
+      </div>
+      <div class="pre-actions" id="preActions" hidden>
+        <label><input type="checkbox" id="preFold"> Retirarme</label>
+        <label><input type="checkbox" id="preCheckFold"> Pasar / retirarme</label>
+        <label><input type="checkbox" id="preCallAny"> Pagar lo que sea</label>
+      </div>
+    </div>
+
+    <div class="action-main" id="actionMain">
+      <div class="bet-panel" id="betPanel" hidden>
+        <div class="bet-quick">
+          <button class="chip-btn" data-bet="min">Mín</button>
+          <button class="chip-btn" data-bet="0.5">½ bote</button>
+          <button class="chip-btn" data-bet="0.75">¾ bote</button>
+          <button class="chip-btn" data-bet="1">Bote</button>
+          <button class="chip-btn danger" data-bet="max">All-in</button>
+        </div>
+        <div class="bet-slider">
+          <input type="range" id="betRange" min="0" max="100" value="0">
+          <input type="number" id="betInput" inputmode="numeric">
+        </div>
+      </div>
+      <div class="buttons">
+        <button class="btn action fold" id="btnFold"><b>Retirarse</b><small>F</small></button>
+        <button class="btn action call" id="btnCall"><b>Pasar</b><small>C</small></button>
+        <button class="btn action raise" id="btnRaise"><b>Subir</b><small>R</small></button>
+      </div>
+      <div class="waiting-msg" id="waitingMsg">Esperando…</div>
+    </div>
+
+    <div class="action-right">
+      <div class="emote-bar" id="emoteBar"></div>
+      <button class="btn ghost small" id="btnSitOut">Ausentarme</button>
+    </div>
+  </footer>
+
+  <aside id="sidePanel" class="side-panel">
+    <div class="side-tabs">
+      <button class="side-tab active" data-side="chat">Chat</button>
+      <button class="side-tab" data-side="history">Manos</button>
+      <button class="side-tab" data-side="stats">Stats</button>
+      <button class="side-tab" data-side="settings">Ajustes</button>
+      <button class="icon-btn close" id="btnClosePanel">✕</button>
+    </div>
+
+    <div class="side-body">
+      <div class="side-view active" data-view="chat">
+        <div id="chatLog" class="chat-log"></div>
+        <form id="chatForm" class="chat-form">
+          <input id="chatInput" maxlength="240" placeholder="Escribe algo…" autocomplete="off">
+          <button class="btn small primary" type="submit">Enviar</button>
+        </form>
+      </div>
+
+      <div class="side-view" data-view="history">
+        <div id="historyList" class="history-list"></div>
+      </div>
+
+      <div class="side-view" data-view="stats">
+        <div id="statsList" class="stats-list"></div>
+      </div>
+
+      <div class="side-view" data-view="settings">
+        <div class="settings">
+          <label class="field">
+            <span>Volumen</span>
+            <input type="range" id="setVolume" min="0" max="100" value="50">
+          </label>
+          <label class="field">
+            <span>Velocidad de animación <em id="speedLabel">normal</em></span>
+            <input type="range" id="setSpeed" min="1" max="3" step="1" value="2">
+          </label>
+          <label class="switch"><input type="checkbox" id="setFourColor"> Baraja de 4 colores</label>
+          <label class="switch"><input type="checkbox" id="setEquity" checked> Mostrar probabilidad de ganar</label>
+          <label class="switch"><input type="checkbox" id="setConfetti" checked> Confeti al ganar</label>
+          <label class="field">
+            <span>Tapete</span>
+            <select id="setFelt">
+              <option value="esmeralda">Esmeralda</option>
+              <option value="medianoche">Medianoche</option>
+              <option value="burdeos">Burdeos</option>
+              <option value="neon">Neón</option>
+            </select>
+          </label>
+          <div class="host-only" id="hostControls">
+            <h3>Control de la mesa</h3>
+            <div class="host-buttons">
+              <button class="btn small" id="btnAddBot">Añadir bot</button>
+              <button class="btn small" id="btnPause">Pausar</button>
+              <button class="btn small" id="btnRebuy">Recargar fichas</button>
+            </div>
+          </div>
+          <div class="shortcuts">
+            <h3>Atajos</h3>
+            <p><kbd>F</kbd> retirarse · <kbd>C</kbd> pasar/pagar · <kbd>R</kbd> subir · <kbd>A</kbd> all-in · <kbd>Espacio</kbd> confirmar · <kbd>1-4</kbd> tamaños de apuesta</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="toast" class="toast" hidden></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

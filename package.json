@@ -1,0 +1,14 @@
+{
+  "name": "holdem-club",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Texas Hold'em online para jugar con amigos (cliente estatico + P2P)",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
