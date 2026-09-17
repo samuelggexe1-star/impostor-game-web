@@ -1496,6 +1496,12 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   transition: background .5s ease;
 }
 
+/* Las cartas ya jugadas quedan debajo, giradas, formando el montón. */
+.uno-descarte .ucard.posada {
+  position: absolute; left: 50%; top: 50%;
+  pointer-events: none; filter: brightness(.72) saturate(.8);
+}
+
 .uno-color {
   position: absolute;
   left: 50%; top: 50%;

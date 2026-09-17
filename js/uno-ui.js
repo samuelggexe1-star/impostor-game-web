@@ -69,6 +69,8 @@ export class UnoUI {
       statsList: $('statsList')
     };
     initConfetti(this.el.confetti);
+    this._pila = [];
+    this._arribaAnterior = null;
     for (const el of [this.el.rivales, this.el.mano, this.el.descarte, this.el.fx]) {
       if (el) el.innerHTML = '';
     }
@@ -179,17 +181,33 @@ export class UnoUI {
     const arriba = v.arriba;
     const firma = arriba ? arriba.id + (arriba.color || '') : '';
     if (firma !== this._firmaMesa) {
+      // El montón guarda las últimas cartas debajo, giradas, para que se vea
+      // que es una pila de verdad y no una carta suelta.
+      if (this._arribaAnterior) {
+        this._pila.push(this._arribaAnterior);
+        while (this._pila.length > 4) this._pila.shift();
+      }
+      this._arribaAnterior = arriba;
       this._firmaMesa = firma;
       this.el.descarte.innerHTML = '';
+      this._pila.forEach((c, i) => {
+        const el = crearCarta(c, { mesa: true });
+        el.classList.add('posada');
+        const giro = ((i * 37) % 23) - 11;
+        el.style.transform = `translate(-50%,-50%) rotate(${giro}deg)`;
+        el.style.opacity = String(0.45 + i * 0.12);
+        this.el.descarte.appendChild(el);
+      });
       if (arriba) {
         const el = crearCarta(arriba, { mesa: true });
         this.el.descarte.appendChild(el);
         if (!motion.reduced) {
+          // Aterrizaje: la carta que venía volando se posa y rebota un poco.
           animateOnce(el,
-            [{ transform: 'translateY(-120px) rotate(-25deg) scale(.6)', opacity: 0 },
-             { transform: 'translateY(4px) rotate(3deg) scale(1.06)', opacity: 1, offset: .7 },
+            [{ transform: 'scale(1.18) rotate(-6deg)', opacity: 0 },
+             { transform: 'scale(.94) rotate(2deg)', opacity: 1, offset: .55 },
              { transform: 'none', opacity: 1 }],
-            { duration: ms(380), easing: 'cubic-bezier(.2,.9,.24,1)' });
+            { duration: ms(340), easing: 'cubic-bezier(.3,1.4,.5,1)' });
         }
       }
     }
