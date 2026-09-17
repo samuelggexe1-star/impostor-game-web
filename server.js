@@ -24,6 +24,34 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Table, DEFAULT_CONFIG } from './js/table.js';
+import { UnoMesa, CONFIG_UNO } from './js/uno-mesa.js';
+
+/** Juegos que sabe alojar el servidor. */
+const JUEGOS = {
+  holdem: {
+    nombre: "Texas Hold'em",
+    crear: (cfg) => new Table(cfg),
+    config: (c) => ({
+      ...DEFAULT_CONFIG,
+      mode: c.mode === 'torneo' ? 'torneo' : 'cash',
+      startingChips: Math.min(100000, Math.max(100, Number(c.startingChips) || 2000)),
+      sb: Math.max(1, Number(c.sb) || 10),
+      bb: Math.max(2, Number(c.bb) || 20),
+      turnSeconds: Math.min(600, Math.max(10, Number(c.turnSeconds) || 30)),
+      speed: 1
+    })
+  },
+  uno: {
+    nombre: 'UNO',
+    crear: (cfg) => new UnoMesa(cfg),
+    config: (c) => ({
+      ...CONFIG_UNO,
+      turnSeconds: Math.min(600, Math.max(10, Number(c.turnSeconds) || 30)),
+      objetivo: Math.min(2000, Math.max(100, Number(c.objetivo) || 500)),
+      speed: 1
+    })
+  }
+};
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
@@ -127,18 +155,28 @@ function log(msg) {
 const rooms = new Map();
 
 class Room {
-  constructor(code, config, owner) {
+  constructor(code, config, owner, juego = 'holdem') {
     this.code = code;
+    this.juego = JUEGOS[juego] ? juego : 'holdem';
     this.ownerId = owner.id;
     this.createdAt = Date.now();
     this.emptySince = Date.now();
     this.clients = new Map();  // playerId -> {res, name}
-    this.table = new Table(config);
+    this.table = JUEGOS[this.juego].crear(config);
     this.table.on('update', (events) => this.broadcast(events));
   }
 
+  /** Humanos sentados, sea cual sea el juego. */
   get playerCount() {
-    return this.table.game.seated().filter((p) => !p.isBot).length;
+    const g = this.table.game;
+    if (typeof g.seated === 'function') return g.seated().filter((p) => !p.isBot).length;
+    return (g.jugadores || []).filter((p) => !p.esBot).length;
+  }
+
+  get totalJugadores() {
+    const g = this.table.game;
+    if (typeof g.seated === 'function') return g.seated().length;
+    return (g.jugadores || []).length;
   }
 
   attach(playerId, res, profile) {
@@ -167,6 +205,7 @@ class Room {
       type: 'accepted',
       playerId,
       code: this.code,
+      juego: this.juego,
       owner: this.ownerId === playerId
     });
     this.send(playerId, []);
@@ -188,7 +227,8 @@ class Room {
     const t = this.table;
     switch (msg.type) {
       case 'act':
-        t.act(playerId, msg.action, Number(msg.amount) || 0);
+        // El poker manda una cantidad; el UNO, que carta y de que color.
+        t.act(playerId, msg.action, this.juego === 'uno' ? (msg.datos || {}) : Number(msg.amount) || 0);
         break;
       case 'chat':
         t.chat(playerId, clean(msg.text, 240));
@@ -220,7 +260,7 @@ class Room {
     const isOwner = playerId === this.ownerId;
     const t = this.table;
     if (cmd === 'rebuy') {
-      t.rebuy(playerId, payload.amount);
+      if (typeof t.rebuy === 'function') t.rebuy(playerId, payload.amount);
       return;
     }
     if (!isOwner) return;
@@ -228,7 +268,7 @@ class Room {
     else if (cmd === 'pause') t.pause(!t.paused);
     else if (cmd === 'resume') t.resume();
     else if (cmd === 'start') t.start();
-    else if (cmd === 'kick') {
+    else if (cmd === 'kick' && t.game.seats) {
       const p = t.game.seats[payload.seat];
       if (p && p.id !== this.ownerId) t.leave(p.id);
     }
@@ -280,28 +320,20 @@ async function handleCreate(req, res) {
   const owner = payload.owner || {};
   if (!owner.id) return json(res, 400, { error: 'falta-jugador' });
 
-  const cfg = payload.config || {};
-  const config = {
-    ...DEFAULT_CONFIG,
-    mode: cfg.mode === 'torneo' ? 'torneo' : 'cash',
-    startingChips: Math.min(100000, Math.max(100, Number(cfg.startingChips) || 2000)),
-    sb: Math.max(1, Number(cfg.sb) || 10),
-    bb: Math.max(2, Number(cfg.bb) || 20),
-    turnSeconds: Math.min(600, Math.max(10, Number(cfg.turnSeconds) || 30)),
-    speed: 1
-  };
+  const juego = JUEGOS[payload.game] ? payload.game : 'holdem';
+  const config = JUEGOS[juego].config(payload.config || {});
 
   let code = makeCode();
   for (let i = 0; i < 12 && rooms.has(code); i++) code = makeCode();
   if (rooms.has(code)) return json(res, 503, { error: 'sin-codigos' });
 
-  const room = new Room(code, config, { id: clean(owner.id, 40) });
+  const room = new Room(code, config, { id: clean(owner.id, 40) }, juego);
   rooms.set(code, room);
   const bots = Math.min(7, Math.max(0, Number(payload.bots) || 0));
   for (let i = 0; i < bots; i++) room.table.addBot(payload.botStyle || null);
 
-  log(`sala ${code} creada (${bots} bots, ${config.sb}/${config.bb})`);
-  json(res, 200, { code, config: { sb: config.sb, bb: config.bb, startingChips: config.startingChips } });
+  log(`sala ${code} (${JUEGOS[juego].nombre}) creada con ${bots} bots`);
+  json(res, 200, { code, juego });
 }
 
 function handleEvents(req, res, url) {
@@ -354,13 +386,15 @@ async function handleSend(req, res) {
 function handleRooms(res) {
   const list = [];
   for (const room of rooms.values()) {
-    const owner = room.table.game.playerById(room.ownerId);
+    const g = room.table.game;
+    const owner = typeof g.playerById === 'function' ? g.playerById(room.ownerId) : g.porId(room.ownerId);
     list.push({
       code: room.code,
-      host: owner ? owner.name : 'Mesa abierta',
-      players: room.table.game.seated().length,
+      juego: room.juego,
+      host: owner ? (owner.name || owner.nombre) : 'Mesa abierta',
+      players: room.totalJugadores,
       humans: room.playerCount,
-      blinds: `${room.table.game.sb}/${room.table.game.bb}`,
+      detalle: room.juego === 'holdem' ? `ciegas ${g.sb}/${g.bb}` : `${room.totalJugadores} jugando`,
       since: room.createdAt
     });
   }
@@ -414,7 +448,7 @@ const server = http.createServer((req, res) => {
   switch (url.pathname) {
     case '/api/ping':
       return json(res, 200, {
-        ok: true, protocol: 2, mode: 'servidor',
+        ok: true, protocol: 3, mode: 'servidor', juegos: Object.keys(JUEGOS),
         port: PORT, addresses: localAddresses(), rooms: rooms.size
       });
     case '/api/rooms':

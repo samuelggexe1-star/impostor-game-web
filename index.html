@@ -267,6 +267,154 @@
     </div>
   </footer>
 
+
+</section>
+
+
+
+<!-- ========================== VESTIBULO UNO ========================== -->
+<section id="unoLobby" class="screen">
+  <div class="lobby-bg" aria-hidden="true">
+    <span class="bg-suit">♠</span><span class="bg-suit">♥</span>
+    <span class="bg-suit">♦</span><span class="bg-suit">♣</span>
+  </div>
+  <div class="lobby-inner">
+    <div class="lobby-top">
+      <button class="icon-btn" id="unoBackHub" title="Volver a los juegos">←</button>
+      <div class="whoami"><span id="unoLobbyAvatar">😎</span><b id="unoLobbyName">—</b></div>
+    </div>
+    <header class="brand">
+      <div class="hub-logo" aria-hidden="true">🃏</div>
+      <h1>UNO</h1>
+      <p class="tagline">El de toda la vida: colores, números, +2, +4 y cantar ¡UNO! antes de que te pillen.</p>
+    </header>
+
+    <div id="unoBanner" class="lan-banner" hidden></div>
+
+    <div class="lobby-grid single">
+      <div class="panel play">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-utab="create" role="tab">Crear partida</button>
+          <button class="tab" data-utab="join" role="tab">Unirme</button>
+          <button class="tab" data-utab="solo" role="tab">Practicar</button>
+        </div>
+
+        <div class="tab-panel active" data-upanel="create">
+          <div class="form-row">
+            <label class="field">
+              <span>Tiempo por turno</span>
+              <select id="unoCfgTurn">
+                <option value="15">15 s · rápido</option>
+                <option value="30" selected>30 s · normal</option>
+                <option value="60">60 s · tranquilo</option>
+                <option value="180">Sin prisa</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Puntos para ganar</span>
+              <select id="unoCfgObjetivo">
+                <option value="200">200 · corta</option>
+                <option value="500" selected>500 · normal</option>
+                <option value="1000">1000 · larga</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Rellenar con bots <em id="unoBotLabel">2</em></span>
+            <input id="unoCfgBots" type="range" min="0" max="6" value="2">
+          </label>
+          <button id="unoBtnCreate" class="btn primary big">Crear partida</button>
+          <p class="hint">Te da un código de 4 letras para tus amigos.</p>
+        </div>
+
+        <div class="tab-panel" data-upanel="join">
+          <label class="field">
+            <span>Código de la sala</span>
+            <input id="unoJoinCode" class="code-input" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
+          </label>
+          <button id="unoBtnJoin" class="btn primary big">Entrar</button>
+          <div id="unoRooms" class="lan-rooms" hidden></div>
+          <div id="unoJoinStatus" class="status"></div>
+        </div>
+
+        <div class="tab-panel" data-upanel="solo">
+          <p class="hint">Partida contra bots en tu propio dispositivo.</p>
+          <label class="field">
+            <span>Rivales <em id="unoSoloLabel">3</em></span>
+            <input id="unoSoloBots" type="range" min="1" max="6" value="3">
+          </label>
+          <button id="unoBtnSolo" class="btn primary big">Jugar ahora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== UNO =============================== -->
+<section id="unoGame" class="screen uno">
+  <header class="topbar">
+    <div class="top-left">
+      <button id="unoLeave" class="icon-btn" title="Salir">←</button>
+      <div class="room-chip" id="unoRoomChip" title="Copiar invitación">
+        <span class="room-label">SALA</span>
+        <span class="room-code" id="unoRoomCode">----</span>
+        <span class="copy-hint">copiar</span>
+      </div>
+    </div>
+    <div class="top-center">
+      <div class="blinds-chip">Ronda <b id="unoRonda">1</b></div>
+      <div class="hand-chip" id="unoSentidoChip">Sentido <b id="unoSentido">→</b></div>
+    </div>
+    <div class="top-right">
+      <span id="unoNet" class="net-status"></span>
+      <button id="unoChatBtn" class="icon-btn chat-btn" title="Chat">💬<span id="unoChatBadge" class="badge" hidden>0</span></button>
+      <button id="unoPanelBtn" class="icon-btn" title="Más">☰</button>
+    </div>
+  </header>
+
+  <main class="uno-area">
+    <div class="uno-rivales" id="unoRivales"></div>
+
+    <div class="uno-centro">
+      <button class="uno-mazo" id="unoMazo" title="Robar carta">
+        <span class="mazo-carta"></span><span class="mazo-carta"></span><span class="mazo-carta"></span>
+        <b id="unoMazoNum">0</b>
+      </button>
+
+      <div class="uno-descarte" id="unoDescarte"></div>
+
+      <div class="uno-color" id="unoColor" aria-label="Color actual"></div>
+    </div>
+
+    <div class="uno-aviso" id="unoAviso" hidden></div>
+    <div id="unoFx" class="fx-layer" aria-hidden="true"></div>
+    <canvas id="unoConfetti" class="confetti"></canvas>
+  </main>
+
+  <footer class="uno-pie">
+    <div class="uno-acciones">
+      <button class="btn action" id="unoRobar"><b>Robar</b></button>
+      <button class="btn action" id="unoPasar" hidden><b>Pasar</b></button>
+      <button class="btn uno-grito" id="unoGrito">¡UNO!</button>
+    </div>
+    <div class="uno-mano" id="unoMano"></div>
+    <div class="uno-estado" id="unoEstado">Esperando…</div>
+  </footer>
+
+  <div class="uno-colores" id="unoSelector" hidden>
+    <div class="selector-caja">
+      <h3>Elige color</h3>
+      <div class="selector-botones">
+        <button data-color="rojo" style="--c:#e8443a">Rojo</button>
+        <button data-color="amarillo" style="--c:#f2c231">Amarillo</button>
+        <button data-color="verde" style="--c:#2fae5a">Verde</button>
+        <button data-color="azul" style="--c:#2f7fe0">Azul</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Panel y avisos, compartidos por todos los juegos -->
   <aside id="sidePanel" class="side-panel">
     <div class="side-tabs">
       <button class="side-tab active" data-side="chat">Chat</button>
@@ -333,9 +481,7 @@
       </div>
     </div>
   </aside>
-
   <div id="toast" class="toast" hidden></div>
-</section>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module" src="js/app.js"></script>

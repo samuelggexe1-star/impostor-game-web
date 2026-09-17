@@ -341,12 +341,13 @@ export class GuestSession extends Emitter {
  * la partida sigue aunque se te apague la pantalla.
  */
 export class RelaySession extends Emitter {
-  constructor({ code, name, avatar, playerId }) {
+  constructor({ code, name, avatar, playerId, juego = null }) {
     super();
     this.code = String(code || '').toUpperCase();
     this.name = name;
     this.avatar = avatar;
     this.you = playerId;
+    this.juego = juego;       // si se indica, se comprueba al entrar
     this.isHost = false;      // lo dice el servidor al aceptarte
     this.online = true;
     this.serverHosted = true;
@@ -378,8 +379,15 @@ export class RelaySession extends Emitter {
     link.on('online', () => this.emit('netstatus', ''));
 
     const accepted = await link.connect();
+    if (this.juego && accepted.juego && accepted.juego !== this.juego) {
+      link.close();
+      throw new Error(accepted.juego === 'uno'
+        ? 'Esa sala es de UNO, no de póker'
+        : 'Esa sala es de póker, no de UNO');
+    }
     this.you = accepted.playerId || this.you;
     this.isHost = !!accepted.owner;
+    this.juego = accepted.juego || this.juego;
     this.startPing();
     return accepted;
   }

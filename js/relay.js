@@ -78,12 +78,12 @@ export async function relayRooms() {
   }
 }
 
-/** Crea una mesa. El servidor devuelve el codigo de 4 letras. */
-export async function createRelayRoom({ owner, config, bots, botStyle }) {
+/** Crea una mesa del juego indicado. El servidor devuelve el codigo de 4 letras. */
+export async function createRelayRoom({ game = 'holdem', owner, config, bots, botStyle }) {
   const res = await fetch(api('/api/room'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ owner, config, bots, botStyle })
+    body: JSON.stringify({ game, owner, config, bots, botStyle })
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

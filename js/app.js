@@ -3,6 +3,8 @@
 import { Table, DEFAULT_CONFIG } from './table.js';
 import { LocalSession, HostSession, GuestSession, RelaySession, roomCode, peerAvailable } from './net.js';
 import { relayInfo, relayRooms, createRelayRoom, relayBase, setRelayBase } from './relay.js';
+import { UnoMesa } from './uno-mesa.js';
+import { UnoUI } from './uno-ui.js';
 import { TableUI } from './ui.js';
 import { sfx } from './sound.js';
 import { motion } from './fx.js';
@@ -21,19 +23,20 @@ const JUEGOS = [
     abrir: () => mostrarPantalla('lobby')
   },
   {
+    id: 'uno',
+    nombre: 'UNO',
+    icono: '🃏',
+    etiqueta: 'Disponible',
+    descripcion: 'El de toda la vida: colores, números, +2, +4 y cantar ¡UNO! antes de que te pillen.',
+    accion: 'Jugar',
+    abrir: () => mostrarPantalla('unoLobby')
+  },
+  {
     id: 'impostor',
     nombre: 'El Impostor',
     icono: '🎭',
     etiqueta: 'Próximamente',
     descripcion: 'Todos reciben una palabra menos uno. Hay que descubrir quién va de farol.',
-    bloqueado: true
-  },
-  {
-    id: 'uno',
-    nombre: 'Cartas locas',
-    icono: '🃏',
-    etiqueta: 'Próximamente',
-    descripcion: 'Rápido, caótico y con cartas que fastidian al de al lado.',
     bloqueado: true
   },
   {
@@ -139,12 +142,13 @@ function applySettings() {
 
 /** Solo una pantalla visible a la vez: hub, vestibulo del juego o mesa. */
 function mostrarPantalla(cual) {
-  for (const id of ['hub', 'lobby', 'game']) {
+  for (const id of ['hub', 'lobby', 'game', 'unoLobby', 'unoGame']) {
     document.getElementById(id).classList.toggle('active', id === cual);
   }
-  if (cual === 'lobby') {
-    $('lobbyAvatar').textContent = state.profile.avatar;
-    $('lobbyName').textContent = state.profile.name || 'Sin nombre';
+  if (cual === 'lobby' || cual === 'unoLobby') {
+    const esUno = cual === 'unoLobby';
+    $(esUno ? 'unoLobbyAvatar' : 'lobbyAvatar').textContent = state.profile.avatar;
+    $(esUno ? 'unoLobbyName' : 'lobbyName').textContent = state.profile.name || 'Sin nombre';
     detectServer();
   }
 }
@@ -233,12 +237,14 @@ function requireNameHub() {
 // ------------------------------------------------------------------ vestibulo
 
 function bindLobby() {
-  document.querySelectorAll('.tab').forEach((tab) => {
+  // Ojo: solo las pestañas de este vestíbulo. El UNO tiene las suyas.
+  document.querySelectorAll('#lobby .tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+      document.querySelectorAll('#lobby .tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('#lobby .tab-panel').forEach((p) => p.classList.remove('active'));
       tab.classList.add('active');
-      document.querySelector(`.tab-panel[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+      const panel = document.querySelector(`#lobby .tab-panel[data-panel="${tab.dataset.tab}"]`);
+      if (panel) panel.classList.add('active');
     });
   });
 
@@ -336,6 +342,7 @@ async function createRoom() {
     btn.textContent = 'Creando mesa…';
     try {
       const { code } = await createRelayRoom({
+        game: 'holdem',
         owner: { id: tabPlayerId(), name: state.profile.name },
         config: { mode: config.mode, startingChips: config.startingChips, sb: config.sb, bb: config.bb, turnSeconds: config.turnSeconds },
         bots
@@ -436,7 +443,7 @@ async function joinRoom() {
   $('btnJoin').disabled = true;
 
   const session = state.server
-    ? new RelaySession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId() })
+    ? new RelaySession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego: 'holdem' })
     : new GuestSession({ code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId() });
 
   try {
@@ -457,6 +464,184 @@ function toastLobby(text, kind = '') {
   const status = $('joinStatus');
   status.className = 'status ' + kind;
   status.textContent = text;
+}
+
+// ----------------------------------------------------------------- uno
+
+function bindUnoLobby() {
+  $('unoBackHub').onclick = () => mostrarPantalla('hub');
+
+  document.querySelectorAll('#unoLobby [data-utab]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#unoLobby [data-utab]').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('#unoLobby [data-upanel]').forEach((p) => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = document.querySelector(`#unoLobby [data-upanel="${tab.dataset.utab}"]`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  const rango = (input, label) => {
+    const upd = () => {
+      if (label) label.textContent = input.value;
+      const pct = ((input.value - input.min) / (input.max - input.min)) * 100;
+      input.style.setProperty('--fill', pct + '%');
+    };
+    input.addEventListener('input', upd);
+    upd();
+  };
+  rango($('unoCfgBots'), $('unoBotLabel'));
+  rango($('unoSoloBots'), $('unoSoloLabel'));
+
+  $('unoJoinCode').addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  });
+
+  $('unoBtnSolo').onclick = () => {
+    if (!requireName()) return;
+    sfx.init();
+    const mesa = new UnoMesa({
+      turnSeconds: 999,
+      speed: [1, 0.7, 1, 1.7][state.settings.speed] || 1
+    });
+    mesa.join({ id: tabPlayerId(), name: state.profile.name, avatar: state.profile.avatar });
+    const bots = Number($('unoSoloBots').value);
+    for (let i = 0; i < bots; i++) mesa.addBot();
+    state.table = mesa;
+    const session = new LocalSession(mesa, tabPlayerId());
+    entrarUno(session, 'LOCAL');
+    mesa.start();
+  };
+
+  $('unoBtnCreate').onclick = async () => {
+    if (!requireName()) return;
+    sfx.init();
+    if (!state.server) {
+      toastUno('Para jugar con amigos hace falta el servidor. Puedes practicar contra bots.', 'error');
+      return;
+    }
+    const btn = $('unoBtnCreate');
+    btn.disabled = true;
+    btn.textContent = 'Creando…';
+    try {
+      const { code } = await createRelayRoom({
+        game: 'uno',
+        owner: { id: tabPlayerId(), name: state.profile.name },
+        config: {
+          turnSeconds: Number($('unoCfgTurn').value),
+          objetivo: Number($('unoCfgObjetivo').value)
+        },
+        bots: Number($('unoCfgBots').value)
+      });
+      const session = new RelaySession({
+        code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego: 'uno'
+      });
+      await session.open();
+      entrarUno(session, code);
+    } catch (err) {
+      toastUno(explainError(err), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear partida';
+    }
+  };
+
+  $('unoBtnJoin').onclick = async () => {
+    if (!requireName()) return;
+    const code = ($('unoJoinCode').value || '').trim().toUpperCase();
+    if (code.length !== 4) return toastUno('El código tiene 4 letras.', 'error');
+    if (!state.server) return toastUno('Hace falta el servidor para unirse a una partida.', 'error');
+    toastUno('Entrando…', 'loading');
+    const session = new RelaySession({
+      code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego: 'uno'
+    });
+    try {
+      await session.open();
+      entrarUno(session, code);
+    } catch (err) {
+      session.close();
+      toastUno(explainError(err), 'error');
+    }
+  };
+}
+
+function toastUno(texto, clase = '') {
+  const el = $('unoJoinStatus');
+  el.className = 'status ' + clase;
+  el.textContent = texto;
+}
+
+function entrarUno(session, code) {
+  state.session = session;
+  keepAwake();
+  mostrarPantalla('unoGame');
+  $('unoRoomCode').textContent = code;
+
+  const ui = new UnoUI({ session, settings: state.settings });
+  state.ui = ui;
+  ui.init();
+  bindUnoControles(session, code);
+  session.refresh();
+}
+
+function bindPanelCompartido(session) {
+  $('chatForm').onsubmit = (e) => {
+    e.preventDefault();
+    const input = $('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    session.chat(text);
+    input.value = '';
+  };
+  $('btnClosePanel').onclick = () => $('sidePanel').classList.remove('open');
+  document.querySelectorAll('.side-tab').forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll('.side-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.side-view').forEach((v) => v.classList.remove('active'));
+      tab.classList.add('active');
+      const vista = document.querySelector(`.side-view[data-view="${tab.dataset.side}"]`);
+      if (vista) vista.classList.add('active');
+      if (tab.dataset.side === 'chat' && state.ui && state.ui.clearChatBadge) state.ui.clearChatBadge();
+    };
+  });
+}
+
+function bindUnoControles(session, code) {
+  bindPanelCompartido(session);
+  // Los controles de mesa del poker no pintan nada en el UNO.
+  $('hostControls').style.display = session.isHost ? '' : 'none';
+  $('btnRebuy').hidden = true;
+  $('btnAddBot').onclick = () => session.command('addBot', {});
+  $('btnPause').onclick = () => session.command('pause', {});
+  $('btnResume').onclick = () => session.command('resume', {});
+
+  $('unoLeave').onclick = () => {
+    if (!confirm('¿Salir de la partida?')) return;
+    releaseWake();
+    if (state.ui) state.ui.destroy();
+    if (state.session) state.session.close();
+    state.session = null;
+    state.table = null;
+    state.ui = null;
+    mostrarPantalla('unoLobby');
+  };
+
+  $('unoChatBtn').onclick = () => {
+    $('sidePanel').classList.add('open');
+    document.querySelectorAll('.side-tab').forEach((t) => t.classList.toggle('active', t.dataset.side === 'chat'));
+    document.querySelectorAll('.side-view').forEach((v) => v.classList.toggle('active', v.dataset.view === 'chat'));
+    if (state.ui && state.ui.clearChatBadge) state.ui.clearChatBadge();
+  };
+  $('unoPanelBtn').onclick = () => $('sidePanel').classList.toggle('open');
+
+  $('unoRoomChip').onclick = async () => {
+    if (code === 'LOCAL') return;
+    const url = `${inviteOrigin()}${location.pathname}?sala=${code}&juego=uno`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'UNO', text: `Ven a jugar al UNO. Sala ${code}`, url });
+      else await navigator.clipboard.writeText(url);
+    } catch (_) {}
+  };
 }
 
 // --------------------------------------------------------------------- juego
@@ -506,6 +691,8 @@ function enterGame(session, code) {
 }
 
 function bindGameControls(session, code) {
+  bindPanelCompartido(session);
+  $('btnRebuy').hidden = false;
   $('btnPanel').onclick = () => $('sidePanel').classList.toggle('open');
 
   const abrirChat = () => {
@@ -737,6 +924,7 @@ loadStored();
 applySettings();
 bindHub();
 bindLobby();
+bindUnoLobby();
 detectServer();
 
 // Si llegas con un código en el enlace, directo al Hold'em.
