@@ -25,6 +25,8 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Table, DEFAULT_CONFIG } from './js/table.js';
 import { UnoMesa, CONFIG_UNO } from './js/uno-mesa.js';
+import { BlackjackMesa, CONFIG_BJ } from './js/blackjack-mesa.js';
+import { AltoBajoMesa, CONFIG_AB } from './js/altobajo-mesa.js';
 
 /** Juegos que sabe alojar el servidor. */
 const JUEGOS = {
@@ -48,6 +50,25 @@ const JUEGOS = {
       ...CONFIG_UNO,
       turnSeconds: Math.min(600, Math.max(10, Number(c.turnSeconds) || 30)),
       objetivo: Math.min(2000, Math.max(100, Number(c.objetivo) || 500)),
+      speed: 1
+    })
+  },
+  blackjack: {
+    nombre: 'Blackjack',
+    crear: (cfg) => new BlackjackMesa(cfg),
+    config: (c) => ({
+      ...CONFIG_BJ,
+      turnSeconds: Math.min(600, Math.max(10, Number(c.turnSeconds) || 25)),
+      fichasIniciales: Math.min(100000, Math.max(100, Number(c.fichasIniciales) || 1000)),
+      speed: 1
+    })
+  },
+  altobajo: {
+    nombre: 'Alto o bajo',
+    crear: (cfg) => new AltoBajoMesa(cfg),
+    config: (c) => ({
+      ...CONFIG_AB,
+      segundosPorCarta: Math.min(60, Math.max(4, Number(c.segundosPorCarta) || 10)),
       speed: 1
     })
   }
@@ -228,7 +249,8 @@ class Room {
     switch (msg.type) {
       case 'act':
         // El poker manda una cantidad; el UNO, que carta y de que color.
-        t.act(playerId, msg.action, this.juego === 'uno' ? (msg.datos || {}) : Number(msg.amount) || 0);
+        // Solo el poker manda una cantidad suelta; el resto, un objeto con datos.
+        t.act(playerId, msg.action, this.juego === 'holdem' ? (Number(msg.amount) || 0) : (msg.datos || {}));
         break;
       case 'chat':
         t.chat(playerId, clean(msg.text, 240));
@@ -395,6 +417,7 @@ function handleRooms(res) {
       players: room.totalJugadores,
       humans: room.playerCount,
       detalle: room.juego === 'holdem' ? `ciegas ${g.sb}/${g.bb}` : `${room.totalJugadores} jugando`,
+      nombreJuego: JUEGOS[room.juego].nombre,
       since: room.createdAt
     });
   }

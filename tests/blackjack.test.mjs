@@ -1,0 +1,226 @@
+// Blackjack: los ases que cambian de valor, el pago 3 a 2, doblar, dividir
+// y que la banca pida hasta 17. Y sobre todo, que las fichas cuadren.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { BlackjackGame, valorMano, esBlackjack } from '../js/blackjack.js';
+import { parseCard, mulberry32 } from '../js/cards.js';
+
+const mano = (s) => s.split(' ').map(parseCard);
+
+function mesa(jugadores = ['ana', 'luis'], opts = {}) {
+  const g = new BlackjackGame({ rng: mulberry32(9), fichasIniciales: 1000, ...opts });
+  for (const id of jugadores) g.sentar({ id, name: id });
+  return g;
+}
+
+/** Coloca cartas concretas para probar una situacion. */
+function montar(g, { jugador, banca, apuesta = 100 }) {
+  g.abrirApuestas();
+  for (const p of g.jugadores) g.apostar(p.id, apuesta);
+  g.repartir();
+  const p = g.jugadores[0];
+  if (jugador) p.manos[0].cartas = mano(jugador);
+  if (banca) g.banca.cartas = mano(banca);
+  return p;
+}
+
+test('los ases valen 11 o 1 segun convenga', () => {
+  assert.equal(valorMano(mano('As Kd')).total, 21);
+  assert.equal(valorMano(mano('As 6d')).total, 17);
+  assert.equal(valorMano(mano('As 6d Ts')).total, 17, 'el as baja a 1');
+  assert.equal(valorMano(mano('As Ad 9c')).total, 21);
+  assert.equal(valorMano(mano('As Ad Ah 8c')).total, 21);
+  assert.equal(valorMano(mano('Kh Qd 5s')).total, 25);
+  assert.equal(valorMano(mano('As 6d')).blanda, true);
+  assert.equal(valorMano(mano('As 6d Ts')).blanda, false);
+});
+
+test('reconoce el blackjack de salida', () => {
+  assert.equal(esBlackjack({ cartas: mano('As Kd') }), true);
+  assert.equal(esBlackjack({ cartas: mano('As 5d 5c') }), false, '21 con tres cartas no es blackjack');
+  assert.equal(esBlackjack({ cartas: mano('As Kd'), dividida: true }), false, 'con cartas divididas tampoco');
+});
+
+test('reparte dos cartas a cada uno y dos a la banca, una tapada', () => {
+  const g = mesa(['ana', 'luis']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.apostar('luis', 50);
+  g.repartir();
+  assert.equal(g.porId('ana').manos[0].cartas.length, 2);
+  assert.equal(g.porId('luis').manos[0].cartas.length, 2);
+  assert.equal(g.banca.cartas.length, 2);
+  const vista = g.snapshot('ana');
+  assert.equal(vista.banca.cartas[1], null, 'la segunda de la banca va tapada');
+  assert.equal(vista.banca.total, null, 'y no se chiva del total');
+  assert.equal(g.porId('ana').fichas, 900, 'la apuesta sale de las fichas');
+});
+
+test('el blackjack paga 3 a 2', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'As Kd', banca: '9h 7c', apuesta: 100 });
+  p.manos[0].estado = 'blackjack';
+  g.estado = 'banca';
+  g.jugarBanca();
+  g.pagar();
+  assert.equal(p.fichas, 900 + 250, 'recupera 100 y cobra 150');
+});
+
+test('si la banca tambien tiene blackjack, empate', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'As Kd', banca: 'Ah Qs', apuesta: 100 });
+  p.manos[0].estado = 'blackjack';
+  g.estado = 'banca';
+  g.jugarBanca();
+  g.pagar();
+  assert.equal(p.fichas, 1000, 'le devuelven su apuesta');
+});
+
+test('pasarse de 21 pierde aunque la banca tambien se pase', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'Kh Qd 5s', banca: 'Ts 9h 8c', apuesta: 100 });
+  p.manos[0].estado = 'pasado';
+  g.estado = 'banca';
+  g.jugarBanca();
+  g.pagar();
+  assert.equal(p.fichas, 900, 'la casa cobra primero');
+});
+
+test('la banca pide hasta 17 y se planta', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'Kh Qd', banca: '5h 6c', apuesta: 100 });
+  p.manos[0].estado = 'plantado';
+  g.estado = 'banca';
+  g.jugarBanca();
+  const total = valorMano(g.banca.cartas).total;
+  assert.ok(total >= 17, `la banca se planta en ${total}`);
+});
+
+test('la banca no juega si todos se han pasado', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'Kh Qd 5s', banca: '5h 6c', apuesta: 100 });
+  p.manos[0].estado = 'pasado';
+  g.estado = 'banca';
+  g.jugarBanca();
+  assert.equal(g.banca.cartas.length, 2, 'no gasta cartas de mas');
+});
+
+test('doblar pone otra apuesta, da una carta y planta', () => {
+  const g = mesa(['ana']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.repartir();
+  const p = g.porId('ana');
+  p.manos[0].cartas = mano('5h 6c');    // 11: el clasico para doblar
+  p.manos[0].estado = 'jugando';
+  g.turno = 0; g.manoActiva = 0; g.estado = 'turnos';
+  assert.equal(g.opciones('ana').puedeDoblar, true);
+  const fichasAntes = p.fichas;
+  g.doblar('ana');
+  assert.equal(p.fichas, fichasAntes - 100, 'pone la segunda apuesta');
+  assert.equal(p.manos[0].apuesta, 200);
+  assert.equal(p.manos[0].cartas.length, 3, 'recibe una sola carta');
+  assert.notEqual(p.manos[0].estado, 'jugando', 'y se queda plantada');
+});
+
+test('dividir una pareja crea dos manos con su apuesta cada una', () => {
+  const g = mesa(['ana']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.repartir();
+  const p = g.porId('ana');
+  p.manos[0].cartas = mano('8h 8c');
+  p.manos[0].estado = 'jugando';
+  g.turno = 0; g.manoActiva = 0; g.estado = 'turnos';
+  assert.equal(g.opciones('ana').puedeDividir, true);
+  const antes = p.fichas;
+  g.dividir('ana');
+  assert.equal(p.manos.length, 2);
+  assert.equal(p.fichas, antes - 100, 'la segunda mano cuesta otra apuesta');
+  for (const m of p.manos) assert.equal(m.cartas.length, 2, 'cada mano recibe su segunda carta');
+});
+
+test('los ases divididos reciben una sola carta', () => {
+  const g = mesa(['ana']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.repartir();
+  const p = g.porId('ana');
+  p.manos[0].cartas = mano('As Ad');
+  p.manos[0].estado = 'jugando';
+  g.turno = 0; g.manoActiva = 0; g.estado = 'turnos';
+  g.dividir('ana');
+  for (const m of p.manos) {
+    assert.equal(m.cartas.length, 2);
+    assert.notEqual(m.estado, 'jugando', 'no se puede seguir pidiendo');
+  }
+});
+
+test('no se puede jugar fuera de turno', () => {
+  const g = mesa(['ana', 'luis']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.apostar('luis', 100);
+  g.repartir();
+  const otro = g.jugadores.find((p) => p !== g.actual());
+  assert.equal(g.pedir(otro.id).ok, false);
+  assert.equal(g.plantarse(otro.id).ok, false);
+});
+
+test('las fichas cuadran ronda tras ronda', () => {
+  const g = mesa(['ana', 'luis', 'eva']);
+  const inicial = g.jugadores.reduce((a, p) => a + p.fichas, 0);
+  let banca = 0;   // lo que gana o pierde la casa
+
+  for (let ronda = 0; ronda < 40; ronda++) {
+    g.abrirApuestas();
+    let apostado = 0;
+    for (const p of g.elegibles()) {
+      const r = g.apostar(p.id, 50);
+      if (r.ok) apostado += r.cantidad;
+    }
+    if (!g.apuestasListas()) break;
+    g.repartir();
+    let guarda = 0;
+    while (g.estado === 'turnos' && guarda++ < 60) {
+      const p = g.actual();
+      const o = g.opciones(p.id);
+      if (!o.tuTurno) break;
+      if (o.total < 17 && o.puedePedir) g.pedir(p.id);
+      else g.plantarse(p.id);
+    }
+    // Las manos dobladas ponen fichas extra: se cuentan aparte
+    const extra = g.jugadores.reduce((a, p) =>
+      a + p.manos.reduce((b, m) => b + (m.doblada ? m.apuesta / 2 : 0), 0), 0);
+    g.jugarBanca();
+    const res = g.pagar();
+    const pagado = res.detalle.reduce((a, d) => a + d.premio, 0);
+    banca += apostado + extra - pagado;
+  }
+
+  const final = g.jugadores.reduce((a, p) => a + p.fichas, 0);
+  assert.equal(final + banca, inicial, 'lo que pierden los jugadores lo gana la banca, ni una ficha de mas');
+  for (const p of g.jugadores) assert.ok(p.fichas >= 0, `${p.nombre} no puede tener fichas negativas`);
+});
+
+test('cada jugador ve sus cartas y las de los demas, pero no la tapada de la banca', () => {
+  const g = mesa(['ana', 'luis']);
+  g.abrirApuestas();
+  g.apostar('ana', 100);
+  g.apostar('luis', 100);
+  g.repartir();
+  const v = g.snapshot('ana');
+  // En blackjack las manos son publicas: cada uno juega contra la casa.
+  for (const p of v.jugadores) assert.ok(p.manos[0].cartas.length === 2);
+  assert.equal(v.banca.cartas[1], null);
+});
+
+test('el zapato se rebaraja cuando se queda corto', () => {
+  const g = mesa(['ana'], { mazos: 1 });
+  g.rellenarZapato();
+  g.zapato = g.zapato.slice(0, 10);
+  const antes = g.zapato.length;
+  g.sacar();
+  assert.ok(g.zapato.length > antes, 'se rehace el zapato');
+});

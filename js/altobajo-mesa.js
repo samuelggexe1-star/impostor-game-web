@@ -1,0 +1,296 @@
+// Mesa de alto o bajo: cuenta atras por carta, bots, chat y reparto de estado.
+// Como todos apuestan a la vez, la mesa solo controla el reloj.
+
+import { Emitter } from './table.js';
+import { AltoBajoGame } from './altobajo.js';
+
+export const CONFIG_AB = {
+  segundosPorCarta: 10,
+  vidas: 3,
+  speed: 1
+};
+
+const RETARDOS = { revelar: 2200, nuevaRonda: 4200, entreCartas: 1400 };
+
+export class AltoBajoMesa extends Emitter {
+  constructor(config = {}) {
+    super();
+    this.config = { ...CONFIG_AB, ...config };
+    this.game = new AltoBajoGame({ vidas: this.config.vidas });
+    this.running = false;
+    this.paused = false;
+    this.timers = new Set();
+    this.reloj = null;
+    this.deadline = 0;
+    this.messages = [];
+    this.pendingEvents = [];
+    this.historial = [];
+    this.lastProgress = Date.now();
+    this.watchdog = null;
+  }
+
+  delay(k) {
+    return Math.max(120, Math.round(RETARDOS[k] / (this.config.speed || 1)));
+  }
+
+  later(fn, ms) {
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      if (!this.destroyed) fn();
+    }, ms);
+    this.timers.add(t);
+    return t;
+  }
+
+  clearTimers() {
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
+    if (this.reloj) clearTimeout(this.reloj);
+    this.reloj = null;
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.running = false;
+    if (this.watchdog) clearInterval(this.watchdog);
+    this.clearTimers();
+  }
+
+  touch() {
+    this.lastProgress = Date.now();
+  }
+
+  pushEvent(ev) {
+    this.pendingEvents.push(ev);
+  }
+
+  publish() {
+    const eventos = this.game.vaciarEventos().concat(this.pendingEvents);
+    this.pendingEvents = [];
+    this.emit('update', eventos);
+  }
+
+  // --------------------------------------------------------------- jugadores
+
+  join(player) {
+    const res = this.game.sentar({ ...player });
+    if (!res.ok) return res;
+    this.system(`${player.name} entra a jugar`);
+    this.pushEvent({ t: 'join', name: player.name });
+    this.publish();
+    this.maybeStart();
+    return res;
+  }
+
+  addBot() {
+    const usados = new Set(this.game.jugadores.map((p) => p.nombre));
+    const nombres = ['Lucia', 'Bruno', 'Nacho', 'Elena', 'Kiko', 'Marta'];
+    const caras = ['🤖', '🦊', '🐼', '🐲', '🦁', '👻'];
+    const i = nombres.findIndex((n) => !usados.has(n));
+    return this.join({
+      id: 'bot-' + Math.random().toString(36).slice(2, 9),
+      name: nombres[i] || 'Bot',
+      avatar: caras[i >= 0 ? i : 0],
+      isBot: true
+    });
+  }
+
+  leave(id) {
+    const p = this.game.porId(id);
+    if (!p) return;
+    this.game.salir(id);
+    this.system(`${p.nombre} se ha ido`);
+    this.publish();
+  }
+
+  setAway(id, away) {
+    const p = this.game.porId(id);
+    if (!p) return;
+    p.ausente = !!away;
+    this.publish();
+    if (!away) this.maybeStart();
+  }
+
+  chat(id, text) {
+    const p = this.game.porId(id);
+    const msg = {
+      id: Math.random().toString(36).slice(2),
+      from: p ? p.nombre : 'Invitado',
+      seat: p ? p.seat : -1,
+      avatar: p ? p.avatar : '👤',
+      text: String(text).slice(0, 240),
+      at: Date.now()
+    };
+    this.messages.push(msg);
+    if (this.messages.length > 120) this.messages.shift();
+    this.pushEvent({ t: 'chat', msg });
+    this.publish();
+  }
+
+  system(text) {
+    this.messages.push({ id: Math.random().toString(36).slice(2), system: true, text, at: Date.now() });
+    if (this.messages.length > 120) this.messages.shift();
+  }
+
+  emote(id, emoji, seat = -1) {
+    const p = this.game.porId(id);
+    if (!p) return;
+    this.pushEvent({ t: 'emote', from: p.seat, to: seat, emoji });
+    this.publish();
+  }
+
+  // ----------------------------------------------------------------- partida
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.touch();
+    this.startWatchdog();
+    this.maybeStart();
+  }
+
+  pause(v) {
+    this.paused = !!v;
+    this.publish();
+    if (!this.paused) this.abrirCarta();
+  }
+
+  resume() {
+    this.paused = false;
+    this.touch();
+    if (this.game.estado === 'apuestas') this.abrirCarta();
+    else this.maybeStart();
+    this.publish();
+  }
+
+  maybeStart() {
+    if (!this.running || this.paused) return;
+    if (this.game.estado === 'apuestas') return;
+    if (!this.game.jugadores.length) {
+      this.publish();
+      return;
+    }
+    const espera = this.game.estado === 'finRonda' ? this.delay('nuevaRonda') : this.delay('entreCartas');
+    this.later(() => {
+      if (this.game.estado === 'apuestas') return;
+      this.game.nuevaRonda();
+      this.registrarRonda();
+      this.publish();
+      this.abrirCarta();
+    }, espera);
+  }
+
+  /** Abre el plazo para apostar a la carta siguiente. */
+  abrirCarta() {
+    if (!this.running || this.paused || this.game.estado !== 'apuestas') return;
+    this.touch();
+    this.deadline = Date.now() + this.config.segundosPorCarta * 1000;
+    this.publish();
+
+    for (const p of this.game.vivos()) {
+      if (!p.esBot || p.apuesta) continue;
+      this.later(() => this.apostarBot(p), 600 + Math.random() * 2500);
+    }
+
+    if (this.reloj) clearTimeout(this.reloj);
+    this.reloj = setTimeout(() => this.revelar(), this.config.segundosPorCarta * 1000);
+  }
+
+  /**
+   * Los bots apuestan con criterio: con una carta baja en mesa casi siempre
+   * sube, y al reves. Con cartas del medio, se lo juegan.
+   */
+  apostarBot(p) {
+    const g = this.game;
+    if (g.estado !== 'apuestas' || !p.vivo || p.apuesta) return;
+    const r = g.carta ? g.carta.r : 8;
+    // Probabilidad real de que suba, mas algo de despiste para que no sean perfectos
+    const probSube = (14 - r) / 12;
+    const acierto = 0.82;                     // cuanto se fian de la logica
+    const logico = probSube > 0.5 ? 'alto' : 'bajo';
+    const elige = Math.random() < acierto ? logico : (logico === 'alto' ? 'bajo' : 'alto');
+    g.apostar(p.id, elige);
+    this.publish();
+    this.comprobar();
+  }
+
+  comprobar() {
+    if (this.game.estado !== 'apuestas') return;
+    if (this.game.todosListos()) {
+      if (this.reloj) clearTimeout(this.reloj);
+      this.later(() => this.revelar(), 500);
+    }
+  }
+
+  revelar() {
+    if (this.game.estado !== 'apuestas') return;
+    if (this.reloj) clearTimeout(this.reloj);
+    this.touch();
+    this.game.revelar();
+    this.deadline = 0;
+    this.publish();
+
+    if (this.game.estado === 'finRonda') {
+      this.registrarRonda();
+      this.maybeStart();
+    } else {
+      this.later(() => this.abrirCarta(), this.delay('revelar'));
+    }
+  }
+
+  act(id, accion, datos = {}) {
+    if (accion !== 'apostar') return { ok: false, reason: 'accion-desconocida' };
+    const res = this.game.apostar(id, datos.apuesta);
+    if (!res.ok) return res;
+    this.touch();
+    this.publish();
+    this.comprobar();
+    return res;
+  }
+
+  registrarRonda() {
+    const g = this.game;
+    if (g.estado !== 'finRonda') return;
+    if (this.historial[0] && this.historial[0].ronda === g.ronda) return;
+    const vivos = g.vivos();
+    const ganador = vivos[0];
+    this.historial.unshift({
+      ronda: g.ronda,
+      cartas: g.mano,
+      ganador: ganador ? ganador.nombre : 'nadie',
+      at: Date.now()
+    });
+    if (this.historial.length > 20) this.historial.pop();
+    if (ganador) this.system(`${ganador.nombre} gana la ronda ${g.ronda}`);
+  }
+
+  startWatchdog() {
+    if (this.watchdog) return;
+    this.watchdog = setInterval(() => {
+      try {
+        if (!this.running || this.paused || this.destroyed) return;
+        if (Date.now() - this.lastProgress < 14000) return;
+        this.pushEvent({ t: 'recover' });
+        this.system('La partida se había quedado parada y ha seguido sola.');
+        if (this.game.estado === 'apuestas') this.revelar();
+        else this.maybeStart();
+      } catch (err) {
+        console.error('[ab vigilante]', err);
+      }
+    }, 3000);
+    if (this.watchdog.unref) this.watchdog.unref();
+  }
+
+  snapshotFor(id) {
+    return {
+      ...this.game.snapshot(id),
+      config: { segundosPorCarta: this.config.segundosPorCarta },
+      running: this.running,
+      paused: this.paused,
+      deadline: this.deadline,
+      now: Date.now(),
+      messages: this.messages.slice(-40),
+      historial: this.historial.slice(0, 10)
+    };
+  }
+}

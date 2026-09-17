@@ -5,6 +5,10 @@ import { LocalSession, HostSession, GuestSession, RelaySession, roomCode, peerAv
 import { relayInfo, relayRooms, createRelayRoom, relayBase, setRelayBase } from './relay.js';
 import { UnoMesa } from './uno-mesa.js';
 import { UnoUI } from './uno-ui.js';
+import { BlackjackMesa } from './blackjack-mesa.js';
+import { BlackjackUI } from './bj-ui.js';
+import { AltoBajoMesa } from './altobajo-mesa.js';
+import { AltoBajoUI } from './ab-ui.js';
 import { TableUI } from './ui.js';
 import { sfx } from './sound.js';
 import { motion } from './fx.js';
@@ -32,19 +36,29 @@ const JUEGOS = [
     abrir: () => mostrarPantalla('unoLobby')
   },
   {
+    id: 'blackjack',
+    nombre: 'Blackjack',
+    icono: '🂡',
+    etiqueta: 'Disponible',
+    descripcion: 'Llegar a 21 sin pasarse. Doblar, dividir y aguantar el tipo contra la banca.',
+    accion: 'Jugar',
+    abrir: () => mostrarPantalla('bjLobby')
+  },
+  {
+    id: 'altobajo',
+    nombre: 'Alto o bajo',
+    icono: '🔮',
+    etiqueta: 'Disponible',
+    descripcion: '¿La siguiente carta será más alta o más baja? Todos a la vez, tres vidas y gana el que aguante.',
+    accion: 'Jugar',
+    abrir: () => mostrarPantalla('abLobby')
+  },
+  {
     id: 'impostor',
     nombre: 'El Impostor',
     icono: '🎭',
     etiqueta: 'Próximamente',
     descripcion: 'Todos reciben una palabra menos uno. Hay que descubrir quién va de farol.',
-    bloqueado: true
-  },
-  {
-    id: 'dados',
-    nombre: 'Dados mentirosos',
-    icono: '🎲',
-    etiqueta: 'Próximamente',
-    descripcion: 'Apuestas a ciegas y aguantas el farol hasta que alguien te llama.',
     bloqueado: true
   }
 ];
@@ -142,13 +156,19 @@ function applySettings() {
 
 /** Solo una pantalla visible a la vez: hub, vestibulo del juego o mesa. */
 function mostrarPantalla(cual) {
-  for (const id of ['hub', 'lobby', 'game', 'unoLobby', 'unoGame']) {
+  for (const id of ['hub', 'lobby', 'game', 'unoLobby', 'unoGame', 'bjLobby', 'bjGame', 'abLobby', 'abGame']) {
     document.getElementById(id).classList.toggle('active', id === cual);
   }
-  if (cual === 'lobby' || cual === 'unoLobby') {
-    const esUno = cual === 'unoLobby';
-    $(esUno ? 'unoLobbyAvatar' : 'lobbyAvatar').textContent = state.profile.avatar;
-    $(esUno ? 'unoLobbyName' : 'lobbyName').textContent = state.profile.name || 'Sin nombre';
+  if (cual.endsWith('Lobby') || cual === 'lobby') {
+    if (cual === 'lobby') {
+      $('lobbyAvatar').textContent = state.profile.avatar;
+      $('lobbyName').textContent = state.profile.name || 'Sin nombre';
+    } else if (cual === 'unoLobby') {
+      $('unoLobbyAvatar').textContent = state.profile.avatar;
+      $('unoLobbyName').textContent = state.profile.name || 'Sin nombre';
+    }
+    document.querySelectorAll('#' + cual + ' .mi-avatar').forEach((e) => (e.textContent = state.profile.avatar));
+    document.querySelectorAll('#' + cual + ' .mi-nombre').forEach((e) => (e.textContent = state.profile.name || 'Sin nombre'));
     detectServer();
   }
 }
@@ -644,6 +664,166 @@ function bindUnoControles(session, code) {
   };
 }
 
+/**
+ * Vestibulo generico: los dos juegos nuevos comparten el mismo esqueleto
+ * (crear / unirse / practicar), asi que se configura con una descripcion.
+ */
+function bindJuegoSimple(cfg) {
+  document.querySelectorAll(`#${cfg.lobby} [data-gtab]`).forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll(`#${cfg.lobby} [data-gtab]`).forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll(`#${cfg.lobby} [data-gpanel]`).forEach((p) => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = document.querySelector(`#${cfg.lobby} [data-gpanel="${tab.dataset.gtab}"]`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  for (const [input, label] of cfg.rangos || []) {
+    const el = $(input);
+    const lab = $(label);
+    const upd = () => {
+      if (lab) lab.textContent = el.value;
+      el.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min)) * 100 + '%');
+    };
+    el.addEventListener('input', upd);
+    upd();
+  }
+
+  const codigo = $(cfg.codigo);
+  if (codigo) {
+    codigo.addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    });
+  }
+
+  const aviso = (txt, clase = '') => {
+    const el = $(cfg.status);
+    if (el) {
+      el.className = 'status ' + clase;
+      el.textContent = txt;
+    }
+  };
+
+  $(cfg.botonSolo).onclick = () => {
+    if (!requireName()) return;
+    sfx.init();
+    const mesa = cfg.crearLocal();
+    mesa.join({ id: tabPlayerId(), name: state.profile.name, avatar: state.profile.avatar });
+    const bots = Number($(cfg.botsSolo).value);
+    for (let i = 0; i < bots; i++) mesa.addBot();
+    state.table = mesa;
+    entrarJuego(cfg, new LocalSession(mesa, tabPlayerId()), 'LOCAL');
+    mesa.start();
+  };
+
+  $(cfg.botonCrear).onclick = async () => {
+    if (!requireName()) return;
+    sfx.init();
+    if (!state.server) return aviso('Para jugar con amigos hace falta el servidor. Puedes practicar contra bots.', 'error');
+    const btn = $(cfg.botonCrear);
+    const texto = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Creando…';
+    try {
+      const { code } = await createRelayRoom({
+        game: cfg.juego,
+        owner: { id: tabPlayerId(), name: state.profile.name },
+        config: cfg.config ? cfg.config() : {},
+        bots: Number($(cfg.botsCrear).value)
+      });
+      const session = new RelaySession({
+        code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego: cfg.juego
+      });
+      await session.open();
+      entrarJuego(cfg, session, code);
+    } catch (err) {
+      aviso(explainError(err), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = texto;
+    }
+  };
+
+  $(cfg.botonUnirse).onclick = async () => {
+    if (!requireName()) return;
+    const code = ($(cfg.codigo).value || '').trim().toUpperCase();
+    if (code.length !== 4) return aviso('El código tiene 4 letras.', 'error');
+    if (!state.server) return aviso('Hace falta el servidor para unirse.', 'error');
+    aviso('Entrando…', 'loading');
+    const session = new RelaySession({
+      code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego: cfg.juego
+    });
+    try {
+      await session.open();
+      entrarJuego(cfg, session, code);
+    } catch (err) {
+      session.close();
+      aviso(explainError(err), 'error');
+    }
+  };
+}
+
+function entrarJuego(cfg, session, code) {
+  state.session = session;
+  keepAwake();
+  mostrarPantalla(cfg.pantalla);
+  const cod = $(cfg.roomCode);
+  if (cod) cod.textContent = code;
+
+  const ui = new cfg.UI({ session, settings: state.settings });
+  state.ui = ui;
+  ui.init();
+  bindPanelCompartido(session);
+
+  const seccion = document.getElementById(cfg.pantalla);
+  seccion.querySelector('[data-salir-juego]').onclick = () => {
+    if (!confirm('¿Salir de la partida?')) return;
+    releaseWake();
+    if (state.ui) state.ui.destroy();
+    if (state.session) state.session.close();
+    state.session = null;
+    state.table = null;
+    state.ui = null;
+    mostrarPantalla(cfg.lobby);
+  };
+  seccion.querySelector('[data-chat-juego]').onclick = () => {
+    $('sidePanel').classList.add('open');
+    document.querySelectorAll('.side-tab').forEach((t) => t.classList.toggle('active', t.dataset.side === 'chat'));
+    document.querySelectorAll('.side-view').forEach((v) => v.classList.toggle('active', v.dataset.view === 'chat'));
+    if (state.ui && state.ui.clearChatBadge) state.ui.clearChatBadge();
+  };
+  seccion.querySelector('[data-panel-juego]').onclick = () => $('sidePanel').classList.toggle('open');
+
+  session.refresh();
+}
+
+function bindJuegosNuevos() {
+  document.querySelectorAll('[data-volver-hub]').forEach((b) => (b.onclick = () => mostrarPantalla('hub')));
+
+  bindJuegoSimple({
+    juego: 'blackjack', lobby: 'bjLobby', pantalla: 'bjGame', UI: BlackjackUI,
+    roomCode: 'bjRoomCode', status: 'bjJoinStatus', codigo: 'bjJoinCode',
+    botonCrear: 'bjBtnCreate', botonUnirse: 'bjBtnJoin', botonSolo: 'bjBtnSolo',
+    botsCrear: 'bjCfgBots', botsSolo: 'bjSoloBots',
+    rangos: [['bjCfgBots', 'bjBotLabel'], ['bjSoloBots', 'bjSoloLabel']],
+    crearLocal: () => new BlackjackMesa({ speed: [1, 0.7, 1, 1.7][state.settings.speed] || 1, turnSeconds: 999 })
+  });
+
+  bindJuegoSimple({
+    juego: 'altobajo', lobby: 'abLobby', pantalla: 'abGame', UI: AltoBajoUI,
+    roomCode: 'abRoomCode', status: 'abJoinStatus', codigo: 'abJoinCode',
+    botonCrear: 'abBtnCreate', botonUnirse: 'abBtnJoin', botonSolo: 'abBtnSolo',
+    botsCrear: 'abCfgBots', botsSolo: 'abSoloBots',
+    rangos: [['abCfgBots', 'abBotLabel'], ['abSoloBots', 'abSoloLabel']],
+    config: () => ({ segundosPorCarta: Number($('abCfgTiempo').value) }),
+    crearLocal: () => new AltoBajoMesa({
+      speed: [1, 0.7, 1, 1.7][state.settings.speed] || 1,
+      segundosPorCarta: Number($('abCfgTiempo').value) || 10
+    })
+  });
+}
+
 // --------------------------------------------------------------------- juego
 
 /** En tablet y movil, evita que la pantalla se apague en mitad de una mano. */
@@ -925,6 +1105,7 @@ applySettings();
 bindHub();
 bindLobby();
 bindUnoLobby();
+bindJuegosNuevos();
 detectServer();
 
 // Si llegas con un código en el enlace, directo al Hold'em.

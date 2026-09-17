@@ -414,6 +414,157 @@
   </div>
 </section>
 
+
+<!-- =========================== BLACKJACK ============================ -->
+<section id="bjLobby" class="screen">
+  <div class="lobby-bg" aria-hidden="true"><span class="bg-suit">♠</span><span class="bg-suit">♥</span><span class="bg-suit">♦</span><span class="bg-suit">♣</span></div>
+  <div class="lobby-inner">
+    <div class="lobby-top">
+      <button class="icon-btn" data-volver-hub title="Volver">←</button>
+      <div class="whoami"><span class="mi-avatar">😎</span><b class="mi-nombre">—</b></div>
+    </div>
+    <header class="brand">
+      <div class="hub-logo" aria-hidden="true">🂡</div>
+      <h1>Blackjack</h1>
+      <p class="tagline">Llegar a 21 sin pasarse. Doblar, dividir y aguantar el tipo contra la banca.</p>
+    </header>
+    <div class="lobby-grid single">
+      <div class="panel play">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-gtab="bj-create">Crear mesa</button>
+          <button class="tab" data-gtab="bj-join">Unirme</button>
+          <button class="tab" data-gtab="bj-solo">Practicar</button>
+        </div>
+        <div class="tab-panel active" data-gpanel="bj-create">
+          <label class="field"><span>Rellenar con bots <em id="bjBotLabel">2</em></span>
+            <input id="bjCfgBots" type="range" min="0" max="4" value="2"></label>
+          <button id="bjBtnCreate" class="btn primary big">Crear mesa</button>
+        </div>
+        <div class="tab-panel" data-gpanel="bj-join">
+          <label class="field"><span>Código de la sala</span>
+            <input id="bjJoinCode" class="code-input" maxlength="4" placeholder="ABCD"></label>
+          <button id="bjBtnJoin" class="btn primary big">Entrar</button>
+          <div id="bjJoinStatus" class="status"></div>
+        </div>
+        <div class="tab-panel" data-gpanel="bj-solo">
+          <label class="field"><span>Otros jugadores <em id="bjSoloLabel">2</em></span>
+            <input id="bjSoloBots" type="range" min="0" max="4" value="2"></label>
+          <button id="bjBtnSolo" class="btn primary big">Jugar ahora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bjGame" class="screen bj">
+  <header class="topbar">
+    <div class="top-left">
+      <button class="icon-btn" data-salir-juego title="Salir">←</button>
+      <div class="room-chip"><span class="room-label">SALA</span><span class="room-code" id="bjRoomCode">----</span></div>
+    </div>
+    <div class="top-center"><div class="blinds-chip">Ronda <b id="bjRonda">0</b></div></div>
+    <div class="top-right">
+      <button class="icon-btn chat-btn" data-chat-juego title="Chat">💬<span class="badge chat-badge" hidden>0</span></button>
+      <button class="icon-btn" data-panel-juego title="Más">☰</button>
+    </div>
+  </header>
+  <main class="bj-area">
+    <div class="bj-banca">
+      <div class="bj-titulo">Banca <b id="bjBancaTotal"></b></div>
+      <div class="bj-cartas" id="bjBancaCartas"></div>
+    </div>
+    <div class="bj-aviso" id="bjAviso" hidden></div>
+    <div class="bj-jugadores" id="bjJugadores"></div>
+    <canvas id="bjConfetti" class="confetti"></canvas>
+  </main>
+  <footer class="bj-pie">
+    <div class="bj-apuestas" id="bjApuestas" hidden>
+      <span class="bj-label">Tu apuesta</span>
+      <div class="bj-fichas" id="bjFichas"></div>
+      <button class="btn primary" id="bjConfirmar">Apostar <b id="bjMonto">0</b></button>
+    </div>
+    <div class="bj-acciones" id="bjAcciones" hidden>
+      <button class="btn action" id="bjPedir"><b>Pedir</b></button>
+      <button class="btn action" id="bjPlantarse"><b>Plantarse</b></button>
+      <button class="btn action" id="bjDoblar"><b>Doblar</b></button>
+      <button class="btn action" id="bjDividir"><b>Dividir</b></button>
+    </div>
+    <div class="bj-estado" id="bjEstado">Esperando…</div>
+  </footer>
+</section>
+
+<!-- ========================== ALTO O BAJO =========================== -->
+<section id="abLobby" class="screen">
+  <div class="lobby-bg" aria-hidden="true"><span class="bg-suit">♠</span><span class="bg-suit">♥</span><span class="bg-suit">♦</span><span class="bg-suit">♣</span></div>
+  <div class="lobby-inner">
+    <div class="lobby-top">
+      <button class="icon-btn" data-volver-hub title="Volver">←</button>
+      <div class="whoami"><span class="mi-avatar">😎</span><b class="mi-nombre">—</b></div>
+    </div>
+    <header class="brand">
+      <div class="hub-logo" aria-hidden="true">🔮</div>
+      <h1>Alto o bajo</h1>
+      <p class="tagline">¿La siguiente carta será más alta o más baja? Todos a la vez, tres vidas y el que aguante gana.</p>
+    </header>
+    <div class="lobby-grid single">
+      <div class="panel play">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-gtab="ab-create">Crear partida</button>
+          <button class="tab" data-gtab="ab-join">Unirme</button>
+          <button class="tab" data-gtab="ab-solo">Practicar</button>
+        </div>
+        <div class="tab-panel active" data-gpanel="ab-create">
+          <label class="field"><span>Segundos por carta</span>
+            <select id="abCfgTiempo"><option value="6">6 · rápido</option><option value="10" selected>10 · normal</option><option value="20">20 · tranquilo</option></select></label>
+          <label class="field"><span>Rellenar con bots <em id="abBotLabel">2</em></span>
+            <input id="abCfgBots" type="range" min="0" max="6" value="2"></label>
+          <button id="abBtnCreate" class="btn primary big">Crear partida</button>
+        </div>
+        <div class="tab-panel" data-gpanel="ab-join">
+          <label class="field"><span>Código de la sala</span>
+            <input id="abJoinCode" class="code-input" maxlength="4" placeholder="ABCD"></label>
+          <button id="abBtnJoin" class="btn primary big">Entrar</button>
+          <div id="abJoinStatus" class="status"></div>
+        </div>
+        <div class="tab-panel" data-gpanel="ab-solo">
+          <label class="field"><span>Rivales <em id="abSoloLabel">3</em></span>
+            <input id="abSoloBots" type="range" min="1" max="6" value="3"></label>
+          <button id="abBtnSolo" class="btn primary big">Jugar ahora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="abGame" class="screen ab">
+  <header class="topbar">
+    <div class="top-left">
+      <button class="icon-btn" data-salir-juego title="Salir">←</button>
+      <div class="room-chip"><span class="room-label">SALA</span><span class="room-code" id="abRoomCode">----</span></div>
+    </div>
+    <div class="top-center"><div class="blinds-chip">Ronda <b id="abRonda">0</b></div><div class="hand-chip">Carta <b id="abMano">0</b></div></div>
+    <div class="top-right">
+      <button class="icon-btn chat-btn" data-chat-juego title="Chat">💬<span class="badge chat-badge" hidden>0</span></button>
+      <button class="icon-btn" data-panel-juego title="Más">☰</button>
+    </div>
+  </header>
+  <main class="ab-area">
+    <div class="ab-jugadores" id="abJugadores"></div>
+    <div class="ab-centro">
+      <div class="ab-historial" id="abHistorial"></div>
+      <div class="ab-carta" id="abCarta"></div>
+      <div class="ab-reloj"><i id="abRelojBarra"></i></div>
+    </div>
+    <div class="ab-aviso" id="abAviso" hidden></div>
+    <canvas id="abConfetti" class="confetti"></canvas>
+  </main>
+  <footer class="ab-pie">
+    <button class="btn ab-boton alto" id="abAlto"><span>▲</span> Más alta</button>
+    <button class="btn ab-boton bajo" id="abBajo"><span>▼</span> Más baja</button>
+    <div class="ab-estado" id="abEstado">Esperando…</div>
+  </footer>
+</section>
+
 <!-- Panel y avisos, compartidos por todos los juegos -->
   <aside id="sidePanel" class="side-panel">
     <div class="side-tabs">
