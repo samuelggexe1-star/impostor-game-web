@@ -163,6 +163,13 @@ export class BlackjackUI {
         });
         this._conteo.set(clave, m.cartas.length);
         mano.appendChild(fila);
+        // Las fichas apostadas se ven, no solo el número.
+        if (m.apuesta > 0) {
+          const pila = document.createElement('div');
+          pila.className = 'bj-pila';
+          for (const valor of chipBreakdown(m.apuesta)) pila.appendChild(makeChipEl(valor));
+          mano.appendChild(pila);
+        }
         const res = m.resultado
           ? `<span class="m-res ${m.resultado}">${{ gana: 'Gana', pierde: 'Pierde', empata: 'Empate', blackjack: 'BLACKJACK' }[m.resultado]}${m.premio ? ' +' + m.premio : ''}</span>`
           : '';

@@ -683,18 +683,21 @@ input[type="range"]::-moz-range-thumb {
   to { transform: translateX(120%); }
 }
 
+/* Ojo: NO poner position:relative aqui. La cara hereda el inset:0 de
+   .card-face; si se cambia, el dibujo se sale de la caja de la carta y
+   tapa lo que hay debajo (fichas, totales...). Los tamanos de dentro
+   suman 1.42 anchos, que es justo lo que mide la carta de alto. */
 .card-front {
-  position: relative;
   background: linear-gradient(165deg, #ffffff, #e6ecf7);
   color: #14203a;
   display: flex; flex-direction: column;
-  padding: calc(var(--cw) * .08);
+  padding: calc(var(--cw) * .07);
   font-weight: 800;
   line-height: 1;
 }
-.card-front .corner { font-size: calc(var(--cw) * .32); display: flex; flex-direction: column; align-items: center; }
-.card-front .corner small { font-size: calc(var(--cw) * .28); }
-.card-front .pip { font-size: calc(var(--cw) * .56); text-align: center; margin: auto; }
+.card-front .corner { font-size: calc(var(--cw) * .26); display: flex; flex-direction: column; align-items: center; }
+.card-front .corner small { font-size: calc(var(--cw) * .2); }
+.card-front .pip { font-size: calc(var(--cw) * .38); text-align: center; margin: auto; }
 .card-front .corner.bottom { transform: rotate(180deg); align-self: flex-end; }
 
 .card-back {
@@ -1758,6 +1761,9 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .bj-mano { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .bj-mano.activa .bj-cartas-mano { box-shadow: 0 0 0 2px var(--gold); border-radius: 10px; }
 .bj-cartas-mano { display: flex; gap: 4px; padding: 3px; }
+.bj-pila { display: flex; margin-top: 2px; height: 16px; }
+.bj-pila .fx-chip { position: static; width: 18px; height: 18px; margin-right: -7px; transform: none; }
+.bj-pila .fx-chip:last-child { margin-right: 0; }
 .bj-mano .m-info { font-size: .76rem; color: var(--muted); }
 .bj-mano .m-total { color: var(--text); font-weight: 700; }
 .bj-mano .m-res { font-size: .72rem; font-weight: 800; padding: 1px 8px; border-radius: 99px; }
