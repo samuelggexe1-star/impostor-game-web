@@ -11,7 +11,7 @@ import { AltoBajoMesa } from './altobajo-mesa.js';
 import { AltoBajoUI } from './ab-ui.js';
 import { TableUI } from './ui.js';
 import { sfx } from './sound.js';
-import { motion } from './fx.js';
+import { motion, ms, animateOnce } from './fx.js';
 
 const AVATARS = ['😎', '🤠', '👑', '🦊', '🐺', '🦁', '🐲', '🦈', '👻', '🤖', '🧙', '🥷', '🐼', '🦩', '🍀', '💎', '🎩', '🚀'];
 
@@ -176,6 +176,7 @@ function mostrarPantalla(cual) {
 function construirHub() {
   const grid = $('gameGrid');
   grid.innerHTML = '';
+  let n = 0;
   for (const j of JUEGOS) {
     const card = document.createElement('button');
     card.type = 'button';
@@ -195,6 +196,14 @@ function construirHub() {
       };
     }
     grid.appendChild(card);
+    // Las tarjetas entran en cascada, una detrás de otra.
+    if (!motion.reduced) {
+      animateOnce(card, [
+        { transform: 'translateY(26px) scale(.94)', opacity: 0 },
+        { transform: 'none', opacity: 1 }
+      ], { duration: ms(430), delay: ms(70 + n * 85), easing: 'cubic-bezier(.2,.9,.24,1)', fill: 'backwards' });
+    }
+    n++;
   }
 }
 

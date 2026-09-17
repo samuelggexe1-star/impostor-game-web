@@ -572,14 +572,27 @@ export class TableUI {
       }
     } else {
       // Mismo numero de cartas: solo cambia el reverso por la cara (showdown).
+      const seDestapan = faceUp && (S.sig || '').startsWith('x');
       S.cardEls.forEach((el, i) => {
         const card = p.hole ? p.hole[i] : null;
         if (card) this.setCardFace(el, card);
         el.classList.toggle('face-down', !faceUp);
+        if (seDestapan) this.voltearCarta(el, i * 140);
       });
     }
     S.sig = sig;
     this.highlightBest(S, p, view);
+  }
+
+  /** Volteo en 3D al enseñar las cartas en el showdown. */
+  voltearCarta(el, retardo = 0) {
+    if (motion.reduced) return;
+    const inner = el.querySelector('.card-inner') || el;
+    animateOnce(inner, [
+      { transform: 'rotateY(180deg) scale(.92)' },
+      { transform: 'rotateY(92deg) scale(1.18)', offset: .45 },
+      { transform: 'rotateY(0deg) scale(1)' }
+    ], { duration: ms(560), delay: ms(retardo), easing: 'cubic-bezier(.25,.85,.3,1.02)', fill: 'backwards' });
   }
 
   /**
