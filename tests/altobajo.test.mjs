@@ -131,3 +131,28 @@ test('el mazo se rehace solo y la partida aguanta muchas manos', () => {
   }
   assert.ok(manos >= 100, `se jugaron ${manos} manos sin atascarse`);
 });
+
+test('quien entra a mitad de ronda espera a la siguiente', () => {
+  const g = partida(['ana', 'luis']);
+  g.sentar({ id: 'tarde', name: 'Tarde' });
+  assert.equal(g.porId('tarde').esperando, true);
+  assert.ok(!g.vivos().some((p) => p.id === 'tarde'), 'no cuenta para la ronda en curso');
+  g.nuevaRonda();
+  assert.equal(g.porId('tarde').esperando, false);
+  assert.ok(g.vivos().some((p) => p.id === 'tarde'), 'ya juega');
+});
+
+test('la ronda no puede eternizarse aunque nadie falle', () => {
+  const g = partida(['ana', 'luis']);
+  let vueltas = 0;
+  while (g.estado === 'apuestas' && vueltas++ < 200) {
+    // Todos aciertan siempre: forzamos la carta para que nadie pierda vidas
+    const actual = g.carta.r;
+    const alto = actual < 8;
+    g.mazo.push({ r: alto ? Math.min(14, actual + 1) : Math.max(2, actual - 1), s: 'h' });
+    for (const p of g.vivos()) g.apostar(p.id, alto ? 'alto' : 'bajo');
+    g.revelar();
+  }
+  assert.equal(g.estado, 'finRonda', `la ronda termina sola (${g.mano} cartas)`);
+  assert.ok(g.mano <= 41, 'por el tope de cartas');
+});

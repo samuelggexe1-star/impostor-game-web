@@ -69,6 +69,11 @@ export class UnoUI {
       statsList: $('statsList')
     };
     initConfetti(this.el.confetti);
+    for (const el of [this.el.rivales, this.el.mano, this.el.descarte, this.el.fx]) {
+      if (el) el.innerHTML = '';
+    }
+    this._firmaMesa = null;
+    this.manoRender = '';
     this.bind();
     this.session.on('state', (v, evs) => this.onState(v, evs));
     this.session.on('latency', (l) => {
@@ -139,6 +144,7 @@ export class UnoUI {
     for (const p of otros) {
       const el = document.createElement('div');
       el.className = 'uno-rival' + (p.esTuTurno ? ' turno' : '') + (p.ausente || p.esperando ? ' fuera' : '');
+      el.dataset.id = p.id;
       const abanico = Array.from({ length: Math.min(7, p.cartas) }, () => '<i></i>').join('');
       el.innerHTML = `
         <span class="r-avatar">${p.avatar}</span>
@@ -325,15 +331,21 @@ export class UnoUI {
           break;
         case 'juega':
           sfx.flip();
+          this.volar(ev.carta, this.origenDe(ev.id), this.el.descarte, { giro: 380 });
           break;
-        case 'roba':
+        case 'roba': {
           sfx.deal();
+          const destino = this.origenDe(ev.id);
+          for (let i = 0; i < Math.min(4, ev.cuantas); i++) {
+            this.volar(null, this.el.mazo, destino, { duracion: 460, giro: 180, escala: .8, retardo: i * 110 });
+          }
           if (ev.cuantas > 1) {
             const quien = this.view.jugadores.find((p) => p.id === ev.id);
             this.aviso(`+${ev.cuantas}`, quien ? `${quien.nombre} roba ${ev.cuantas}` : '', 1300);
             sfx.chip(2);
           }
           break;
+        }
         case 'salta': {
           const p = this.view.jugadores.find((x) => x.id === ev.id);
           this.aviso('¡Te saltas!', p ? `${p.nombre} pierde el turno` : '', 1200);
@@ -347,6 +359,7 @@ export class UnoUI {
           break;
         case 'color':
           sfx.chat();
+          this.fogonazoColor(ev.color);
           break;
         case 'uno': {
           const p = this.view.jugadores.find((x) => x.id === ev.id);
@@ -391,6 +404,65 @@ export class UnoUI {
           break;
       }
     }
+  }
+
+  /** Punto de partida de una carta segun quien la juega. */
+  origenDe(id) {
+    if (!this.view) return null;
+    if (id === this.view.you) {
+      const mano = this.el.mano;
+      return mano && mano.children.length ? mano.children[Math.floor(mano.children.length / 2)] : mano;
+    }
+    return this.el.rivales.querySelector(`[data-id="${CSS.escape(id)}"]`);
+  }
+
+  /**
+   * Manda una carta volando de un sitio a otro. Se usa al jugar (de la mano al
+   * monton), al robar (del mazo a la mano) y en los +2 y +4.
+   */
+  volar(carta, desde, hasta, { duracion = 520, giro = 360, escala = 1, retardo = 0 } = {}) {
+    if (motion.reduced || !desde || !hasta) return;
+    const capa = this.el.fx;
+    const a = rectIn(desde, capa);
+    const b = rectIn(hasta, capa);
+    if (!a.w && !b.w) return;
+
+    let el;
+    if (carta) {
+      el = crearCarta(carta);
+    } else {
+      el = document.createElement('div');
+      el.className = 'ucard comodin';
+      el.innerHTML = '<span class="rueda"></span>';
+    }
+    el.style.position = 'absolute';
+    el.style.left = a.cx + 'px';
+    el.style.top = a.cy + 'px';
+    el.style.margin = '0';
+    el.style.zIndex = '30';
+    capa.appendChild(el);
+
+    const dx = b.cx - a.cx;
+    const dy = b.cy - a.cy;
+    animateOnce(el, [
+      { transform: 'translate(-50%,-50%) scale(.85) rotate(0deg)', opacity: 1 },
+      { transform: `translate(-50%,-50%) translate(${dx * 0.5}px, ${dy * 0.5 - 40}px) scale(1.15) rotate(${giro * 0.5}deg)`, opacity: 1, offset: 0.55 },
+      { transform: `translate(-50%,-50%) translate(${dx}px, ${dy}px) scale(${escala}) rotate(${giro}deg)`, opacity: 1 }
+    ], { duration: ms(duracion), delay: ms(retardo), easing: 'cubic-bezier(.22,.9,.24,1)', fill: 'backwards' })
+      .finished.catch(() => {}).then(() => el.remove());
+  }
+
+  /** La mesa se tiñe un instante del color elegido con el comodín. */
+  fogonazoColor(color) {
+    if (motion.reduced) return;
+    const hex = COLOR_HEX[color];
+    if (!hex) return;
+    const capa = document.createElement('div');
+    capa.style.cssText = `position:absolute;inset:0;pointer-events:none;z-index:25;border-radius:inherit;background:radial-gradient(circle at 50% 45%, ${hex}, transparent 68%);`;
+    this.el.fx.appendChild(capa);
+    animateOnce(capa, [{ opacity: 0 }, { opacity: .55, offset: .2 }, { opacity: 0 }],
+      { duration: ms(900), easing: 'ease-out' })
+      .finished.catch(() => {}).then(() => capa.remove());
   }
 
   girarSentido() {

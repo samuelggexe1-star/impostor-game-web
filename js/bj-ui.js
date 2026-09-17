@@ -2,7 +2,7 @@
 
 import { RANK_LABEL, SUIT_GLYPH } from './cards.js';
 import { sfx } from './sound.js';
-import { motion, ms, initConfetti, confettiBurst, animateOnce } from './fx.js';
+import { motion, ms, rectIn, floatText, makeChipEl, chipBreakdown, initConfetti, confettiBurst, animateOnce } from './fx.js';
 
 const FICHAS = [10, 25, 50, 100, 250];
 const COLOR_FICHA = { 10: '#e9eef5', 25: '#1f7a43', 50: '#b02b2b', 100: '#14202b', 250: '#2b2f77' };
@@ -54,12 +54,19 @@ export class BlackjackUI {
       ronda: $('bjRonda'),
       roomCode: $('bjRoomCode'),
       confetti: $('bjConfetti'),
+      fx: $('bjFx'),
+      zapato: $('bjZapato'),
       chatLog: $('chatLog'),
       historyList: $('historyList'),
       statsList: $('statsList'),
       badge: document.querySelector('#bjGame .chat-badge')
     };
     initConfetti(this.el.confetti);
+    this.el.banca.innerHTML = '';
+    this.el.jugadores.innerHTML = '';
+    this.el.fx.innerHTML = '';
+    this._firmaBanca = null;
+    this._conteo = new Map();
     this.construirFichas();
     this.bind();
     this.session.on('state', (v, e) => this.onState(v, e));
@@ -118,44 +125,56 @@ export class BlackjackUI {
     // Banca
     const firma = v.banca.cartas.map((c) => (c ? c.r + c.s : 'x')).join(',');
     if (firma !== this._firmaBanca) {
+      const antes = (this._firmaBanca || '').split(',').filter(Boolean);
       this._firmaBanca = firma;
       this.el.banca.innerHTML = '';
       v.banca.cartas.forEach((c, i) => {
         const el = crearCarta(c, !c);
         this.el.banca.appendChild(el);
-        if (!motion.reduced) {
-          animateOnce(el, [{ transform: 'translateY(-40px) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }],
-            { duration: ms(320), delay: ms(i * 90), easing: 'cubic-bezier(.2,.9,.24,1)', fill: 'backwards' });
-        }
+        if (antes.length && antes[i] === 'x' && c) this.destapar(el);
+        else if (i >= antes.length) this.entradaDesdeZapato(el, i * 110);
       });
     }
-    this.el.bancaTotal.textContent = v.banca.total != null ? v.banca.total : '';
+    this.el.bancaTotal.textContent = v.banca.total != null ? v.banca.total
+      : (v.banca.visible != null ? v.banca.visible + '+?' : '');
 
     // Jugadores
+    const nuevas = [];
     this.el.jugadores.innerHTML = '';
     for (const p of v.jugadores) {
       const el = document.createElement('div');
       el.className = 'bj-jugador' + (p.esTuTurno ? ' turno' : '');
-      const manos = p.manos.map((m, i) => {
-        const cartas = m.cartas.map((c) => {
+      el.dataset.id = p.id;
+      el.innerHTML = `<div class="j-cab">${p.avatar} ${escapeHtml(p.nombre)}${p.esBot ? ' 🤖' : ''}</div>
+        <div class="j-fichas">${p.fichas.toLocaleString('es-ES')} fichas</div>`;
+      if (!p.manos.length) el.insertAdjacentHTML('beforeend', '<div class="m-info">sin jugar</div>');
+      p.manos.forEach((m, i) => {
+        const mano = document.createElement('div');
+        mano.className = 'bj-mano' + (p.esTuTurno && v.manoActiva === i ? ' activa' : '');
+        mano.dataset.mano = i;
+        const fila = document.createElement('div');
+        fila.className = 'bj-cartas-mano';
+        const clave = p.id + ':' + i;
+        const antes = this._conteo.get(clave) || 0;
+        m.cartas.forEach((c, j) => {
           const cc = crearCarta(c);
-          return cc.outerHTML;
-        }).join('');
-        const activa = p.esTuTurno && v.manoActiva === i ? ' activa' : '';
+          fila.appendChild(cc);
+          if (j >= antes) nuevas.push([cc, (j - antes) * 110]);
+        });
+        this._conteo.set(clave, m.cartas.length);
+        mano.appendChild(fila);
         const res = m.resultado
           ? `<span class="m-res ${m.resultado}">${{ gana: 'Gana', pierde: 'Pierde', empata: 'Empate', blackjack: 'BLACKJACK' }[m.resultado]}${m.premio ? ' +' + m.premio : ''}</span>`
           : '';
-        return `<div class="bj-mano${activa}">
-            <div class="bj-cartas-mano">${cartas}</div>
-            <div class="m-info"><span class="m-total">${m.total}${m.blanda ? ' blando' : ''}</span> · ${m.apuesta}${m.doblada ? ' ×2' : ''}</div>
-            ${res}
-          </div>`;
-      }).join('');
-      el.innerHTML = `<div class="j-cab">${p.avatar} ${escapeHtml(p.nombre)}${p.esBot ? ' 🤖' : ''}</div>
-        <div class="j-fichas">${p.fichas.toLocaleString('es-ES')} fichas</div>
-        ${manos || '<div class="m-info">sin jugar</div>'}`;
+        mano.insertAdjacentHTML('beforeend',
+          `<div class="m-info"><span class="m-total">${m.total}${m.blanda ? ' blando' : ''}</span> · ${m.apuesta}${m.doblada ? ' ×2' : ''}</div>${res}`);
+        el.appendChild(mano);
+      });
       this.el.jugadores.appendChild(el);
     }
+    // Al empezar una ronda nueva se olvidan los conteos y todo vuelve a animarse.
+    if (v.estado === 'apuestas') this._conteo.clear();
+    for (const [cc, retardo] of nuevas) this.entradaDesdeZapato(cc, retardo);
 
     // Controles
     const yo = this.yo();
@@ -224,16 +243,119 @@ export class BlackjackUI {
         case 'dobla': sfx.raise(); break;
         case 'pasado': {
           const p = this.view.jugadores.find((x) => x.id === ev.id);
+          this.sello(ev.id, 'PASADO');
           if (p && p.soyYo) { this.aviso('Te has pasado', `${ev.total} puntos`, 1800); sfx.lose(); }
+          else sfx.fold();
           break;
         }
         case 'destapa': sfx.flip(); break;
-        case 'pagos': this.mostrarPagos(ev.resultados); break;
+        case 'pagos':
+          this.fichasDePago(ev.resultados);
+          this.mostrarPagos(ev.resultados);
+          break;
         case 'chat': sfx.chat(); this.bumpBadge(); break;
         case 'recover': this.aviso('Mesa reanudada', '', 1500); break;
         default: break;
       }
     }
+  }
+
+  // ------------------------------------------------------ piezas de animación
+
+  /** Una carta recién repartida entra volando desde el zapato del crupier. */
+  entradaDesdeZapato(el, retardo = 0) {
+    if (motion.reduced || !this.el.zapato) return;
+    const capa = this.el.fx;
+    const a = rectIn(this.el.zapato, capa);
+    const b = rectIn(el, capa);
+    if (!b.w) return;
+    const dx = a.cx - b.cx;
+    const dy = a.cy - b.cy;
+    animateOnce(el, [
+      { transform: `translate(${dx}px, ${dy}px) rotate(-16deg) scale(.6)`, opacity: 0 },
+      { transform: `translate(${dx * 0.35}px, ${dy * 0.35 - 24}px) rotate(-7deg) scale(1.08)`, opacity: 1, offset: .55 },
+      { transform: 'none', opacity: 1 }
+    ], { duration: ms(460), delay: ms(retardo), easing: 'cubic-bezier(.2,.9,.24,1)', fill: 'backwards' });
+    if (this.el.zapato) {
+      animateOnce(this.el.zapato, [{ transform: 'none' }, { transform: 'translateX(-5px) rotate(-3deg)' }, { transform: 'none' }],
+        { duration: ms(260), delay: ms(retardo), easing: 'ease-out' });
+    }
+  }
+
+  /** Vuelta de la carta tapada de la banca. */
+  destapar(el) {
+    if (motion.reduced) return;
+    // El giro va sobre .card-inner, que es quien tiene la perspectiva del padre.
+    const inner = el.querySelector('.card-inner') || el;
+    animateOnce(inner, [
+      { transform: 'rotateY(180deg) scale(.94)' },
+      { transform: 'rotateY(90deg) scale(1.1)', offset: .5 },
+      { transform: 'rotateY(0deg) scale(1)' }
+    ], { duration: ms(520), easing: 'cubic-bezier(.3,.8,.3,1)' });
+  }
+
+  /** Sello rojo de "PASADO" sobre la placa de quien se pasa de 21. */
+  sello(id, texto) {
+    const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (!plato || motion.reduced) return;
+    const capa = this.el.fx;
+    const r = rectIn(plato, capa);
+    const s = document.createElement('div');
+    s.className = 'bj-sello';
+    s.textContent = texto;
+    s.style.left = r.cx + 'px';
+    s.style.top = r.cy + 'px';
+    capa.appendChild(s);
+    animateOnce(s, [
+      { transform: 'translate(-50%,-50%) rotate(-14deg) scale(2.6)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) rotate(-14deg) scale(.92)', opacity: 1, offset: .25 },
+      { transform: 'translate(-50%,-50%) rotate(-14deg) scale(1)', opacity: 1, offset: .75 },
+      { transform: 'translate(-50%,-50%) rotate(-14deg) scale(1.1)', opacity: 0 }
+    ], { duration: ms(1500), easing: 'cubic-bezier(.2,1.4,.3,1)' })
+      .finished.catch(() => {}).then(() => s.remove());
+    animateOnce(plato, [{ transform: 'none' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(7px)' }, { transform: 'none' }],
+      { duration: ms(340), easing: 'ease-in-out' });
+  }
+
+  /** Fichas que viajan entre la banca y cada jugador al liquidar la ronda. */
+  fichasDePago(res) {
+    if (motion.reduced || !res || !res.detalle) return;
+    const capa = this.el.fx;
+    const banca = rectIn(this.el.banca, capa);
+    let retardo = 0;
+    for (const d of res.detalle) {
+      const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(d.id)}"]`);
+      if (!plato) continue;
+      const r = rectIn(plato, capa);
+      const gana = d.premio > d.apuesta;
+      const pierde = d.premio === 0;
+      if (!gana && !pierde) continue;            // el empate no mueve fichas
+      const desde = gana ? banca : r;
+      const hasta = gana ? r : banca;
+      for (const valor of chipBreakdown(gana ? d.premio - d.apuesta : d.apuesta)) {
+        this.volarFicha(valor, desde, hasta, retardo);
+        retardo += 70;
+      }
+      floatText(capa, { cx: r.cx, cy: r.y }, (gana ? '+' : '−') + (gana ? d.premio - d.apuesta : d.apuesta),
+        gana ? 'win' : 'lose');
+    }
+  }
+
+  volarFicha(valor, desde, hasta, retardo) {
+    const capa = this.el.fx;
+    const ficha = makeChipEl(valor);
+    ficha.style.left = desde.cx + 'px';
+    ficha.style.top = desde.cy + 'px';
+    capa.appendChild(ficha);
+    const dx = hasta.cx - desde.cx;
+    const dy = hasta.cy - desde.cy;
+    const desvio = (Math.random() - .5) * 46;
+    animateOnce(ficha, [
+      { transform: 'translate(-50%,-50%) scale(.5)', opacity: 0 },
+      { transform: `translate(-50%,-50%) translate(${dx * .5 + desvio}px, ${dy * .5 - 46}px) scale(1.1)`, opacity: 1, offset: .5 },
+      { transform: `translate(-50%,-50%) translate(${dx}px, ${dy}px) scale(.85)`, opacity: 0 }
+    ], { duration: ms(700), delay: ms(retardo), easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'backwards' })
+      .finished.catch(() => {}).then(() => ficha.remove());
   }
 
   mostrarPagos(res) {
@@ -284,6 +406,7 @@ export class BlackjackUI {
 
   destroy() {
     clearTimeout(this._t);
+    if (this.el.fx) this.el.fx.innerHTML = '';
   }
 }
 

@@ -106,6 +106,13 @@ export class TableUI {
     };
 
     initConfetti(this.el.confetti);
+    // Al volver a entrar a una partida hay que partir de cero: si no, los
+    // asientos y cartas de la anterior se quedan colgando en el DOM.
+    this.el.seats.innerHTML = '';
+    this.el.board.innerHTML = '';
+    this.el.fx.innerHTML = '';
+    this.seatEls.clear();
+    this.boardEls = [];
     this.buildEmotes();
     this.buildQuickChat();
     this.bindControls();

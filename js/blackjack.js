@@ -429,7 +429,11 @@ export class BlackjackGame {
         cartas: this.banca.cartas.length === 0
           ? []
           : (ocultarBanca ? [this.banca.cartas[0], null] : this.banca.cartas.slice()),
+        // Con la carta tapada se enseña solo lo que vale la descubierta.
         total: ocultarBanca ? null : valorMano(this.banca.cartas).total,
+        visible: ocultarBanca && this.banca.cartas.length
+          ? valorMano(this.banca.cartas.slice(0, 1)).total
+          : null,
         oculta: ocultarBanca
       },
       turno: this.actual() ? this.actual().id : null,

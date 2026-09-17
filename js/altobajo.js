@@ -5,6 +5,8 @@
 import { makeDeck, shuffle, secureRng, RANK_LABEL } from './cards.js';
 
 export const VIDAS = 3;
+/** Tope de cartas por ronda: evita rondas eternas si nadie falla. */
+export const MAX_CARTAS = 40;
 
 export class AltoBajoGame {
   constructor(opts = {}) {
@@ -41,6 +43,9 @@ export class AltoBajoGame {
       apuesta: null,
       vivo: true,
       ausente: false,
+      // Con la ronda empezada se mira: entrar con tres vidas nuevas a mitad
+      // de partida alarga la ronda indefinidamente y es injusto.
+      esperando: this.estado === 'apuestas' || this.estado === 'revelando',
       rondasGanadas: 0,
       seat: this.jugadores.length
     };
@@ -61,7 +66,7 @@ export class AltoBajoGame {
   }
 
   vivos() {
-    return this.jugadores.filter((p) => p.vivo && !p.ausente);
+    return this.jugadores.filter((p) => p.vivo && !p.ausente && !p.esperando);
   }
 
   sacar() {
@@ -86,6 +91,7 @@ export class AltoBajoGame {
       p.vidas = this.vidas;
       p.racha = 0;
       p.apuesta = null;
+      p.esperando = false;      // ronda nueva, juegan todos
       p.vivo = !p.ausente;
     }
     this.carta = this.sacar();
@@ -156,9 +162,13 @@ export class AltoBajoGame {
 
     const vivos = this.vivos();
     const soloUno = this.jugadores.length > 1 && vivos.length <= 1;
-    if (soloUno || vivos.length === 0) {
+    const demasiadas = this.mano >= MAX_CARTAS;
+    if (soloUno || vivos.length === 0 || demasiadas) {
       this.estado = 'finRonda';
-      const ganador = vivos[0] || null;
+      // Si se acaba por tope, gana quien mas puntos lleve de los que siguen.
+      const ganador = soloUno || vivos.length === 0
+        ? (vivos[0] || null)
+        : [...vivos].sort((a, b) => b.puntos - a.puntos)[0] || null;
       if (ganador) {
         ganador.rondasGanadas++;
         ganador.puntos += 5;                    // premio por aguantar
@@ -207,6 +217,7 @@ export class AltoBajoGame {
         mejorRacha: p.mejorRacha,
         rondasGanadas: p.rondasGanadas,
         vivo: p.vivo,
+        esperando: !!p.esperando,
         // La apuesta ajena no se ve hasta que se revela: si no, se copian.
         apuesta: (yo && p.id === yo.id) ? p.apuesta : (p.apuesta ? 'oculta' : null),
         soyYo: !!yo && p.id === yo.id

@@ -2,7 +2,7 @@
 
 import { RANK_LABEL, SUIT_GLYPH } from './cards.js';
 import { sfx } from './sound.js';
-import { motion, ms, initConfetti, confettiBurst, animateOnce } from './fx.js';
+import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce } from './fx.js';
 
 function crearCarta(c) {
   const el = document.createElement('div');
@@ -45,12 +45,18 @@ export class AltoBajoUI {
       mano: $('abMano'),
       roomCode: $('abRoomCode'),
       confetti: $('abConfetti'),
+      fx: $('abFx'),
+      fogonazo: $('abFogonazo'),
       chatLog: $('chatLog'),
       historyList: $('historyList'),
       statsList: $('statsList'),
       badge: document.querySelector('#abGame .chat-badge')
     };
     initConfetti(this.el.confetti);
+    for (const el of [this.el.jugadores, this.el.carta, this.el.historial, this.el.fx]) {
+      if (el) el.innerHTML = '';
+    }
+    this._firma = null;
     this.el.alto.onclick = () => this.apostar('alto');
     this.el.bajo.onclick = () => this.apostar('bajo');
     this.session.on('state', (v, e) => this.onState(v, e));
@@ -69,9 +75,12 @@ export class AltoBajoUI {
 
   onState(view, eventos) {
     this.clockOffset = view.now ? view.now - Date.now() : 0;
+    // El volteo gordo lo lanza animar(), asi que render() no pone el suyo.
+    this._volteoPendiente = (eventos || []).some((e) => e.t === 'revela');
     this.view = view;
     this.render();
     this.animar(eventos || []);
+    this._volteoPendiente = false;
   }
 
   render() {
@@ -82,7 +91,7 @@ export class AltoBajoUI {
     // Jugadores con sus vidas
     this.el.jugadores.innerHTML = v.jugadores.map((p) => {
       const vidas = '❤️'.repeat(Math.max(0, p.vidas)) + '🖤'.repeat(Math.max(0, v.vidasMax - p.vidas));
-      return `<div class="ab-jugador${p.vivo ? '' : ' fuera'}${p.apuesta ? ' listo' : ''}">
+      return `<div class="ab-jugador${p.vivo ? '' : ' fuera'}${p.apuesta ? ' listo' : ''}${p.racha >= 3 ? ' ardiendo' : ''}" data-id="${escapeHtml(p.id)}">
         <span class="a-avatar">${p.avatar}</span>
         <span>
           <span class="a-nombre">${escapeHtml(p.nombre)}${p.esBot ? ' 🤖' : ''}</span>
@@ -100,7 +109,8 @@ export class AltoBajoUI {
       this.el.carta.innerHTML = '';
       if (v.carta) {
         const el = crearCarta(v.carta);
-        el.classList.add('saliendo');
+        // Sin 'saliendo' cuando toca el volteo largo: lo lanza animar().
+        if (!this._volteoPendiente) el.classList.add('saliendo');
         this.el.carta.appendChild(el);
       }
     }
@@ -161,14 +171,31 @@ export class AltoBajoUI {
           break;
         case 'revela': {
           sfx.flip();
+          const subio = ev.acertada === 'alto';
+          this.alHistorial(ev.anterior);
+          this.voltear(subio, ev.empate);
           const yo = this.view.jugadores.find((p) => p.soyYo);
           const mio = yo && ev.detalle.find((d) => d.id === yo.id);
+
+          // Cada jugador se lleva su reacción: puntos, corazón roto o llamas.
+          for (const d of ev.detalle) {
+            if (d.resultado === 'acierta') {
+              this.puntosFlotantes(d.id, '+' + d.puntos, 'win');
+              if (d.racha >= 3) this.llamarada(d.id, d.racha);
+            } else if (d.resultado === 'falla') {
+              this.corazonRoto(d.id);
+              if (d.vidas <= 0) this.eliminado(d.id);
+            }
+          }
+
           if (ev.empate) this.aviso('¡Empate!', 'Misma carta: no cuenta', 'bien', 1600);
           else if (mio && mio.resultado === 'acierta') {
             this.aviso('¡Bien!', `+${mio.puntos} punto${mio.puntos > 1 ? 's' : ''}${mio.racha >= 3 ? ` · racha de ${mio.racha} 🔥` : ''}`, 'bien', 1700);
+            this.fogonazo(true);
             sfx.win();
           } else if (mio && mio.resultado === 'falla') {
             this.aviso('Fallaste', `Te quedan ${mio.vidas} vida${mio.vidas === 1 ? '' : 's'}`, 'mal', 1700);
+            this.fogonazo(false);
             sfx.lose();
           }
           break;
@@ -191,6 +218,154 @@ export class AltoBajoUI {
         default: break;
       }
     }
+  }
+
+  // ------------------------------------------------------ piezas de animación
+
+  /**
+   * El momento gordo del juego: la carta nueva llega tapada, da la vuelta y
+   * detrás sale una flecha verde o roja segun haya subido o bajado.
+   */
+  voltear(subio, empate) {
+    const carta = this.el.carta.querySelector('.card');
+    if (!carta || motion.reduced) return;
+    const inner = carta.querySelector('.card-inner') || carta;
+    animateOnce(inner, [
+      { transform: 'rotateY(180deg) translateY(-26px) scale(.72)', opacity: .25 },
+      { transform: 'rotateY(96deg) translateY(-10px) scale(1.18)', opacity: 1, offset: .42 },
+      { transform: 'rotateY(18deg) scale(1.08)', offset: .74 },
+      { transform: 'rotateY(0deg) scale(1)' }
+    ], { duration: ms(760), easing: 'cubic-bezier(.24,.85,.3,1.05)' });
+    if (!empate) this.flecha(subio);
+  }
+
+  /** La carta anterior se encoge y se va al historial de arriba. */
+  alHistorial(carta) {
+    const capa = this.el.fx;
+    if (!capa || !carta || motion.reduced) return;
+    const destino = this.el.historial.lastElementChild || this.el.historial;
+    const a = rectIn(this.el.carta, capa);
+    const b = rectIn(destino, capa);
+    if (!a.w || !b.w) return;
+    const el = crearCarta(carta);
+    el.style.position = 'absolute';
+    el.style.left = a.cx + 'px';
+    el.style.top = a.cy + 'px';
+    el.style.transform = 'translate(-50%,-50%)';
+    el.style.setProperty('--cw', a.w + 'px');
+    capa.appendChild(el);
+    animateOnce(el, [
+      { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+      { transform: `translate(-50%,-50%) translate(${(b.cx - a.cx) * .55}px, ${(b.cy - a.cy) * .55}px) scale(.55) rotate(-8deg)`, opacity: .85, offset: .6 },
+      { transform: `translate(-50%,-50%) translate(${b.cx - a.cx}px, ${b.cy - a.cy}px) scale(${b.w / a.w}) rotate(0deg)`, opacity: 0 }
+    ], { duration: ms(620), easing: 'cubic-bezier(.3,.7,.3,1)' })
+      .finished.catch(() => {}).then(() => el.remove());
+  }
+
+  /** Flecha grande detrás de la carta: ▲ si ha subido, ▼ si ha bajado. */
+  flecha(subio) {
+    const capa = this.el.fx;
+    if (!capa) return;
+    const r = rectIn(this.el.carta, capa);
+    const el = document.createElement('div');
+    el.className = 'ab-flecha ' + (subio ? 'sube' : 'baja');
+    el.textContent = subio ? '▲' : '▼';
+    el.style.left = r.cx + 'px';
+    el.style.top = r.cy + 'px';
+    capa.appendChild(el);
+    const dy = subio ? -1 : 1;
+    animateOnce(el, [
+      { transform: `translate(-50%,-50%) translateY(${dy * 70}px) scale(.4)`, opacity: 0 },
+      { transform: 'translate(-50%,-50%) translateY(0) scale(1.35)', opacity: .85, offset: .35 },
+      { transform: `translate(-50%,-50%) translateY(${dy * -90}px) scale(1.7)`, opacity: 0 }
+    ], { duration: ms(1100), delay: ms(300), easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' })
+      .finished.catch(() => {}).then(() => el.remove());
+  }
+
+  /** Destello verde o rojo por toda la mesa segun tu resultado. */
+  fogonazo(bien) {
+    const el = this.el.fogonazo;
+    if (!el || motion.reduced) return;
+    el.style.setProperty('--tono', bien ? 'rgba(53,208,127,.34)' : 'rgba(255,95,109,.34)');
+    animateOnce(el, [{ opacity: 0 }, { opacity: 1, offset: .16 }, { opacity: 0 }],
+      { duration: ms(680), easing: 'ease-out' });
+  }
+
+  /** Corazón que se parte cuando alguien pierde una vida. */
+  corazonRoto(id) {
+    const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    const capa = this.el.fx;
+    if (!plato || !capa || motion.reduced) return;
+    const vidas = plato.querySelector('.a-vidas');
+    const r = rectIn(vidas || plato, capa);
+    for (const lado of [-1, 1]) {
+      const trozo = document.createElement('div');
+      trozo.className = 'ab-trozo';
+      trozo.textContent = '💔';
+      trozo.style.left = r.cx + 'px';
+      trozo.style.top = r.cy + 'px';
+      trozo.style.clipPath = lado < 0 ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
+      capa.appendChild(trozo);
+      animateOnce(trozo, [
+        { transform: 'translate(-50%,-50%) scale(1.5) rotate(0deg)', opacity: 1 },
+        { transform: `translate(-50%,-50%) translate(${lado * 30}px, 40px) scale(.9) rotate(${lado * 42}deg)`, opacity: 0 }
+      ], { duration: ms(900), easing: 'cubic-bezier(.4,.1,.7,1)' })
+        .finished.catch(() => {}).then(() => trozo.remove());
+    }
+    animateOnce(plato, [{ transform: 'none' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }],
+      { duration: ms(320), easing: 'ease-in-out' });
+  }
+
+  /** Llamaradas para quien lleva racha. */
+  llamarada(id, racha) {
+    const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    const capa = this.el.fx;
+    if (!plato || !capa || motion.reduced) return;
+    const r = rectIn(plato, capa);
+    for (let i = 0; i < Math.min(6, 2 + racha); i++) {
+      const f = document.createElement('div');
+      f.className = 'ab-llama';
+      f.textContent = '🔥';
+      f.style.left = (r.x + Math.random() * r.w) + 'px';
+      f.style.top = (r.y + r.h - 6) + 'px';
+      capa.appendChild(f);
+      animateOnce(f, [
+        { transform: 'translate(-50%,-50%) scale(.4)', opacity: 0 },
+        { transform: 'translate(-50%,-50%) translateY(-22px) scale(1.1)', opacity: 1, offset: .35 },
+        { transform: `translate(-50%,-50%) translate(${(Math.random() - .5) * 26}px, -58px) scale(.5)`, opacity: 0 }
+      ], { duration: ms(1000), delay: ms(i * 90), easing: 'ease-out', fill: 'backwards' })
+        .finished.catch(() => {}).then(() => f.remove());
+    }
+  }
+
+  /** Sello de eliminado sobre la placa de quien se queda sin vidas. */
+  eliminado(id) {
+    const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    const capa = this.el.fx;
+    if (!plato || !capa || motion.reduced) return;
+    const r = rectIn(plato, capa);
+    const s = document.createElement('div');
+    s.className = 'ab-sello';
+    s.textContent = 'FUERA';
+    s.style.left = r.cx + 'px';
+    s.style.top = r.cy + 'px';
+    capa.appendChild(s);
+    animateOnce(s, [
+      { transform: 'translate(-50%,-50%) rotate(-12deg) scale(3)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) rotate(-12deg) scale(.95)', opacity: 1, offset: .22 },
+      { transform: 'translate(-50%,-50%) rotate(-12deg) scale(1)', opacity: 1, offset: .7 },
+      { transform: 'translate(-50%,-50%) rotate(-12deg) scale(1.15)', opacity: 0 }
+    ], { duration: ms(1800), easing: 'cubic-bezier(.2,1.5,.3,1)' })
+      .finished.catch(() => {}).then(() => s.remove());
+    sfx.allin();
+  }
+
+  /** Puntos que suben flotando junto a quien acierta. */
+  puntosFlotantes(id, texto, clase) {
+    const plato = this.el.jugadores.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (!plato || !this.el.fx || motion.reduced) return;
+    const r = rectIn(plato, this.el.fx);
+    floatText(this.el.fx, { cx: r.cx, cy: r.y }, texto, clase);
   }
 
   /** Barra de cuenta atras. */
@@ -232,6 +407,7 @@ export class AltoBajoUI {
 
   destroy() {
     cancelAnimationFrame(this._raf);
+    if (this.el.fx) this.el.fx.innerHTML = '';
     clearTimeout(this._t);
   }
 }
