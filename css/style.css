@@ -331,6 +331,125 @@ input[type="range"]::-moz-range-thumb {
 .lobby-features b { display: block; color: var(--gold-soft); margin-bottom: 4px; font-size: .95rem; }
 .lobby-features span { color: var(--muted); font-size: .85rem; line-height: 1.45; }
 
+/* ================================= HUB ================================= */
+
+#hub {
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  background:
+    radial-gradient(1000px 600px at 12% -10%, rgba(160, 107, 255, .2), transparent 60%),
+    radial-gradient(900px 600px at 100% 10%, rgba(53, 208, 127, .16), transparent 55%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-0) 70%);
+  padding: 24px 16px;
+}
+
+.hub-inner { position: relative; width: min(880px, 100%); margin: auto; }
+
+.hub-head { text-align: center; margin-bottom: 22px; }
+.hub-logo { font-size: 3rem; line-height: 1; margin-bottom: 6px; animation: cardFloat 4s ease-in-out infinite; }
+.hub-head h1 { font-size: clamp(2rem, 6vw, 3.2rem); font-weight: 900; letter-spacing: -.03em; }
+.hub-head h1 span {
+  background: linear-gradient(120deg, var(--gold), #fff4d0 55%, var(--gold));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+.hub-profile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.hub-avatar-big {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 2.2rem;
+  background: radial-gradient(circle at 35% 30%, #2a3a5e, #131d35);
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  transition: transform .15s ease, border-color .2s ease;
+}
+.hub-avatar-big:hover { transform: scale(1.06); border-color: var(--gold); }
+.hub-profile-fields .field { margin-bottom: 8px; }
+.hub-avatars { grid-column: 1 / -1; grid-template-columns: repeat(9, 1fr); }
+
+.hub-section {
+  font-size: .8rem; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--muted); margin-bottom: 12px;
+}
+
+.game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+
+.game-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 20px;
+  min-height: 170px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .16s ease, border-color .2s ease, box-shadow .25s ease;
+}
+.game-card:hover:not(.locked) {
+  transform: translateY(-4px);
+  border-color: var(--gold);
+  box-shadow: 0 16px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(246,196,83,.3);
+}
+.game-card .g-icon { font-size: 2.4rem; line-height: 1; }
+.game-card .g-name { font-size: 1.25rem; font-weight: 800; }
+.game-card .g-desc { color: var(--muted); font-size: .88rem; line-height: 1.45; flex: 1; }
+.game-card .g-go {
+  align-self: flex-start;
+  font-size: .82rem; font-weight: 700;
+  color: #2a1e00;
+  background: linear-gradient(180deg, #ffd978, var(--gold));
+  border-radius: 99px; padding: 7px 15px;
+}
+.game-card.locked { cursor: default; opacity: .55; }
+.game-card.locked .g-go {
+  background: rgba(255,255,255,.08);
+  color: var(--muted);
+}
+.game-card .g-tag {
+  position: absolute; top: 12px; right: 12px;
+  font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 99px;
+  background: rgba(53, 208, 127, .18);
+  border: 1px solid rgba(53, 208, 127, .45);
+  color: var(--green);
+}
+.game-card.locked .g-tag {
+  background: rgba(255,255,255,.06);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.hub-foot { text-align: center; color: var(--muted); font-size: .82rem; margin-top: 22px; }
+
+.lobby-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.whoami {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 99px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--line);
+}
+.whoami span { font-size: 1.2rem; }
+.whoami b { font-size: .92rem; }
+
+.lobby-grid.single { grid-template-columns: 1fr; }
+
+@media (max-width: 640px) {
+  .hub-profile { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .hub-profile-fields { width: 100%; }
+  .hub-avatars { grid-template-columns: repeat(6, 1fr); }
+}
+
 /* ================================ MESA ================================= */
 
 #game { flex-direction: column; background: linear-gradient(180deg, var(--bg-1), var(--bg-0)); }
@@ -374,6 +493,73 @@ input[type="range"]::-moz-range-thumb {
 .blinds-chip b, .hand-chip b { color: var(--text); font-size: .95rem; }
 .level-timer { color: var(--gold); font-variant-numeric: tabular-nums; }
 .net-status { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+
+.chat-btn { position: relative; }
+.chat-btn .badge {
+  position: absolute;
+  top: -5px; right: -5px;
+  min-width: 19px; height: 19px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--red);
+  color: #fff;
+  font-size: .68rem; font-weight: 800;
+  display: grid; place-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  animation: badgePop .35s cubic-bezier(.2,1.7,.4,1);
+}
+@keyframes badgePop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+/* Lo que se dice se ve en la mesa, no escondido en un panel. */
+.speech {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: min(220px, 40vw);
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: linear-gradient(180deg, #fefefe, #e9eef7);
+  color: #16203a;
+  font-size: .88rem;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45);
+  z-index: 24;
+  pointer-events: none;
+  word-break: break-word;
+  animation: speechIn .32s cubic-bezier(.2,1.6,.4,1);
+}
+.speech::after {
+  content: '';
+  position: absolute;
+  left: 14px; bottom: -6px;
+  border: 7px solid transparent;
+  border-top-color: #e9eef7;
+  border-bottom: 0;
+}
+.speech .who { display: block; font-size: .68rem; font-weight: 800; color: #5a6b8c; margin-bottom: 1px; }
+.speech.fade { opacity: 0; transition: opacity .4s ease, transform .4s ease; transform: translate(-50%, -120%); }
+@keyframes speechIn {
+  from { opacity: 0; transform: translate(-50%, -80%) scale(.8); }
+  to { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}
+
+.chat-quick {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 8px 10px 0;
+}
+.quick-msg {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.05);
+  border-radius: 99px;
+  padding: 6px 12px;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: background .18s ease, transform .12s ease;
+}
+.quick-msg:hover { background: rgba(246,196,83,.16); transform: translateY(-1px); }
 .net-status.bad { color: var(--red); }
 
 /* ---- superficie ---- */

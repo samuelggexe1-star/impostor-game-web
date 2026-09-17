@@ -70,7 +70,7 @@ export class Game {
       away: false,
       revealed: false,
       timeBank: 30,
-      stats: { hands: 0, won: 0, vpip: 0, biggestPot: 0, showdowns: 0, bestHand: null }
+      stats: { hands: 0, won: 0, vpip: 0, raises: 0, calls: 0, folds: 0, biggestPot: 0, showdowns: 0, bestHand: null }
     };
     return { ok: true, seat: s };
   }
@@ -280,6 +280,7 @@ export class Game {
         }
         p.status = 'folded';
         p.lastAction = { type: 'fold' };
+        p.stats.folds++;
         break;
       }
       case 'check': {
@@ -291,6 +292,7 @@ export class Game {
         if (toCall <= 0) return this.act(id, 'check');
         const paid = this.moveChips(p, toCall);
         p.lastAction = { type: 'call', amount: paid };
+        p.stats.calls++;
         if (this.stage === STAGE.PREFLOP) p.stats.vpip++;
         break;
       }
@@ -331,6 +333,7 @@ export class Game {
           to,
           allIn: p.chips === 0
         };
+        p.stats.raises++;
         if (this.stage === STAGE.PREFLOP) p.stats.vpip++;
         break;
       }

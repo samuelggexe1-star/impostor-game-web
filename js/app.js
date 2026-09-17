@@ -8,6 +8,43 @@ import { sfx } from './sound.js';
 import { motion } from './fx.js';
 
 const AVATARS = ['😎', '🤠', '👑', '🦊', '🐺', '🦁', '🐲', '🦈', '👻', '🤖', '🧙', '🥷', '🐼', '🦩', '🍀', '💎', '🎩', '🚀'];
+
+/** Juegos de la sala. Añadir uno nuevo es añadir una entrada aquí. */
+const JUEGOS = [
+  {
+    id: 'holdem',
+    nombre: "Texas Hold'em",
+    icono: '♠️',
+    etiqueta: 'Disponible',
+    descripcion: 'Poker No Limit con tus amigos. Sala privada con código, bots y todas las reglas de verdad.',
+    accion: 'Jugar',
+    abrir: () => mostrarPantalla('lobby')
+  },
+  {
+    id: 'impostor',
+    nombre: 'El Impostor',
+    icono: '🎭',
+    etiqueta: 'Próximamente',
+    descripcion: 'Todos reciben una palabra menos uno. Hay que descubrir quién va de farol.',
+    bloqueado: true
+  },
+  {
+    id: 'uno',
+    nombre: 'Cartas locas',
+    icono: '🃏',
+    etiqueta: 'Próximamente',
+    descripcion: 'Rápido, caótico y con cartas que fastidian al de al lado.',
+    bloqueado: true
+  },
+  {
+    id: 'dados',
+    nombre: 'Dados mentirosos',
+    icono: '🎲',
+    etiqueta: 'Próximamente',
+    descripcion: 'Apuestas a ciegas y aguantas el farol hasta que alguien te llama.',
+    bloqueado: true
+  }
+];
 const STORE_KEY = 'holdem-club/perfil';
 const SETTINGS_KEY = 'holdem-club/ajustes';
 
@@ -98,35 +135,104 @@ function applySettings() {
   $('speedLabel').textContent = speedNames[s.speed] || 'normal';
 }
 
-// ------------------------------------------------------------------ vestibulo
+// ---------------------------------------------------------------- pantallas
 
-function buildAvatarPicker() {
-  const wrap = $('avatarPicker');
-  wrap.innerHTML = '';
-  for (const a of AVATARS) {
-    const b = document.createElement('button');
-    b.className = 'avatar-opt' + (a === state.profile.avatar ? ' selected' : '');
-    b.textContent = a;
-    b.type = 'button';
-    b.onclick = () => {
-      state.profile.avatar = a;
-      saveProfile();
-      wrap.querySelectorAll('.avatar-opt').forEach((x) => x.classList.remove('selected'));
-      b.classList.add('selected');
-      sfx.init();
-      sfx.chip(1);
-    };
-    wrap.appendChild(b);
+/** Solo una pantalla visible a la vez: hub, vestibulo del juego o mesa. */
+function mostrarPantalla(cual) {
+  for (const id of ['hub', 'lobby', 'game']) {
+    document.getElementById(id).classList.toggle('active', id === cual);
+  }
+  if (cual === 'lobby') {
+    $('lobbyAvatar').textContent = state.profile.avatar;
+    $('lobbyName').textContent = state.profile.name || 'Sin nombre';
+    detectServer();
   }
 }
 
-function bindLobby() {
-  $('playerName').value = state.profile.name;
-  $('playerName').addEventListener('input', (e) => {
+function construirHub() {
+  const grid = $('gameGrid');
+  grid.innerHTML = '';
+  for (const j of JUEGOS) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'game-card' + (j.bloqueado ? ' locked' : '');
+    card.innerHTML = `
+      <span class="g-tag">${escapeHtml(j.etiqueta)}</span>
+      <span class="g-icon">${j.icono}</span>
+      <span class="g-name">${escapeHtml(j.nombre)}</span>
+      <span class="g-desc">${escapeHtml(j.descripcion)}</span>
+      <span class="g-go">${j.bloqueado ? 'En preparación' : escapeHtml(j.accion)}</span>`;
+    if (!j.bloqueado) {
+      card.onclick = () => {
+        if (!requireNameHub()) return;
+        sfx.init();
+        sfx.chip(1);
+        j.abrir();
+      };
+    }
+    grid.appendChild(card);
+  }
+}
+
+function bindHub() {
+  const input = $('hubName');
+  input.value = state.profile.name;
+  input.addEventListener('input', (e) => {
     state.profile.name = e.target.value.slice(0, 16);
     saveProfile();
   });
 
+  $('hubAvatarBig').textContent = state.profile.avatar;
+  const panel = $('hubAvatars');
+  const toggle = () => { panel.hidden = !panel.hidden; };
+  $('btnChangeAvatar').onclick = toggle;
+  $('hubAvatarBig').onclick = toggle;
+
+  panel.innerHTML = '';
+  for (const a of AVATARS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'avatar-opt' + (a === state.profile.avatar ? ' selected' : '');
+    b.textContent = a;
+    b.onclick = () => {
+      state.profile.avatar = a;
+      saveProfile();
+      $('hubAvatarBig').textContent = a;
+      panel.querySelectorAll('.avatar-opt').forEach((x) => x.classList.remove('selected'));
+      b.classList.add('selected');
+      sfx.init();
+      sfx.chip(1);
+    };
+    panel.appendChild(b);
+  }
+
+  construirHub();
+  $('btnBackHub').onclick = () => mostrarPantalla('hub');
+}
+
+/** Sin nombre no se entra a ningún juego. */
+function requireNameHub() {
+  const name = ($('hubName').value || '').trim();
+  if (!name) {
+    const input = $('hubName');
+    input.focus();
+    input.style.borderColor = 'var(--red)';
+    input.animate(
+      [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' },
+       { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }],
+      { duration: 300 }
+    );
+    setTimeout(() => (input.style.borderColor = ''), 1500);
+    return false;
+  }
+  state.profile.name = name;
+  saveProfile();
+  return true;
+}
+
+// ------------------------------------------------------------------ vestibulo
+
+function bindLobby() {
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
@@ -166,16 +272,14 @@ function bindLobby() {
   }
 }
 
+/** El nombre se pone en el hub; aquí solo se comprueba. */
 function requireName() {
-  const name = ($('playerName').value || '').trim();
+  const name = (state.profile.name || '').trim();
   if (!name) {
-    $('playerName').focus();
-    $('playerName').style.borderColor = 'var(--red)';
-    setTimeout(() => ($('playerName').style.borderColor = ''), 1200);
+    mostrarPantalla('hub');
+    requireNameHub();
     return null;
   }
-  state.profile.name = name;
-  saveProfile();
   return name;
 }
 
@@ -386,8 +490,7 @@ document.addEventListener('visibilitychange', () => {
 function enterGame(session, code) {
   state.session = session;
   keepAwake();
-  $('lobby').classList.remove('active');
-  $('game').classList.add('active');
+  mostrarPantalla('game');
   $('roomCode').textContent = code;
   document.querySelector('.room-chip').classList.toggle('local', code === 'LOCAL');
 
@@ -404,6 +507,15 @@ function enterGame(session, code) {
 
 function bindGameControls(session, code) {
   $('btnPanel').onclick = () => $('sidePanel').classList.toggle('open');
+
+  const abrirChat = () => {
+    $('sidePanel').classList.add('open');
+    document.querySelectorAll('.side-tab').forEach((t) => t.classList.toggle('active', t.dataset.side === 'chat'));
+    document.querySelectorAll('.side-view').forEach((v) => v.classList.toggle('active', v.dataset.view === 'chat'));
+    if (state.ui) state.ui.clearChatBadge();
+    setTimeout(() => $('chatInput').focus(), 120);
+  };
+  $('btnChat').onclick = abrirChat;
   $('btnClosePanel').onclick = () => $('sidePanel').classList.remove('open');
 
   document.querySelectorAll('.side-tab').forEach((tab) => {
@@ -412,6 +524,7 @@ function bindGameControls(session, code) {
       document.querySelectorAll('.side-view').forEach((v) => v.classList.remove('active'));
       tab.classList.add('active');
       document.querySelector(`.side-view[data-view="${tab.dataset.side}"]`).classList.add('active');
+      if (tab.dataset.side === 'chat' && state.ui) state.ui.clearChatBadge();
     });
   });
 
@@ -517,10 +630,8 @@ function leaveGame() {
   state.session = null;
   state.table = null;
   state.ui = null;
-  $('game').classList.remove('active');
-  $('lobby').classList.add('active');
+  mostrarPantalla('lobby');
   $('sidePanel').classList.remove('open');
-  detectServer();
 }
 
 /** Direccion que hay que repartir a los amigos. */
@@ -624,9 +735,14 @@ function escapeHtml(s) {
 
 loadStored();
 applySettings();
-buildAvatarPicker();
+bindHub();
 bindLobby();
 detectServer();
+
+// Si llegas con un código en el enlace, directo al Hold'em.
+if (new URLSearchParams(location.search).get('sala') && state.profile.name) {
+  mostrarPantalla('lobby');
+}
 
 // El audio del navegador necesita un gesto del usuario para arrancar.
 const unlock = () => {

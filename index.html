@@ -14,14 +14,52 @@
 </head>
 <body data-felt="esmeralda">
 
+<!-- ============================== HUB =============================== -->
+<section id="hub" class="screen active">
+  <div class="lobby-bg" aria-hidden="true">
+    <span class="bg-suit">♠</span><span class="bg-suit">♥</span>
+    <span class="bg-suit">♦</span><span class="bg-suit">♣</span>
+  </div>
+
+  <div class="hub-inner">
+    <header class="hub-head">
+      <div class="hub-logo" aria-hidden="true">🎲</div>
+      <h1>Sala de <span>juegos</span></h1>
+      <p class="tagline">Elige tu nombre y a qué jugamos hoy.</p>
+    </header>
+
+    <div class="panel hub-profile">
+      <div class="hub-avatar-big" id="hubAvatarBig">😎</div>
+      <div class="hub-profile-fields">
+        <label class="field">
+          <span>Tu nombre</span>
+          <input id="hubName" maxlength="16" placeholder="¿Cómo te llamas?" autocomplete="nickname">
+        </label>
+        <button class="btn small ghost" id="btnChangeAvatar" type="button">Cambiar avatar</button>
+      </div>
+      <div id="hubAvatars" class="avatar-picker hub-avatars" role="radiogroup" aria-label="Elige avatar" hidden></div>
+    </div>
+
+    <h2 class="hub-section">Juegos</h2>
+    <div class="game-grid" id="gameGrid"></div>
+
+    <p class="hub-foot">Tus partidas no se guardan en ningún sitio: se juegan y se olvidan.</p>
+  </div>
+</section>
+
 <!-- ============================ VESTIBULO ============================ -->
-<section id="lobby" class="screen active">
+<section id="lobby" class="screen">
   <div class="lobby-bg" aria-hidden="true">
     <span class="bg-suit">♠</span><span class="bg-suit">♥</span>
     <span class="bg-suit">♦</span><span class="bg-suit">♣</span>
   </div>
 
   <div class="lobby-inner">
+    <div class="lobby-top">
+      <button class="icon-btn" id="btnBackHub" title="Volver a los juegos">←</button>
+      <div class="whoami"><span id="lobbyAvatar">😎</span><b id="lobbyName">—</b></div>
+    </div>
+
     <header class="brand">
       <div class="brand-cards" aria-hidden="true">
         <div class="brand-card red">A<small>♥</small></div>
@@ -33,17 +71,7 @@
 
     <div id="lanBanner" class="lan-banner" hidden></div>
 
-    <div class="lobby-grid">
-      <div class="panel identity">
-        <h2>Tu jugador</h2>
-        <label class="field">
-          <span>Nombre</span>
-          <input id="playerName" maxlength="16" placeholder="¿Cómo te llamas?" autocomplete="nickname">
-        </label>
-        <span class="field-label">Avatar</span>
-        <div id="avatarPicker" class="avatar-picker" role="radiogroup" aria-label="Elige avatar"></div>
-      </div>
-
+    <div class="lobby-grid single">
       <div class="panel play">
         <div class="tabs" role="tablist">
           <button class="tab active" data-tab="create" role="tab">Crear mesa</button>
@@ -159,8 +187,9 @@
     </div>
     <div class="top-right">
       <span id="netStatus" class="net-status"></span>
+      <button id="btnChat" class="icon-btn chat-btn" title="Chat">💬<span id="chatBadge" class="badge" hidden>0</span></button>
       <button id="btnSound" class="icon-btn" title="Sonido">🔊</button>
-      <button id="btnPanel" class="icon-btn" title="Chat y ajustes">☰</button>
+      <button id="btnPanel" class="icon-btn" title="Ajustes y más">☰</button>
     </div>
   </header>
 
@@ -250,6 +279,7 @@
     <div class="side-body">
       <div class="side-view active" data-view="chat">
         <div id="chatLog" class="chat-log"></div>
+        <div class="chat-quick" id="chatQuick"></div>
         <form id="chatForm" class="chat-form">
           <input id="chatInput" maxlength="240" placeholder="Escribe algo…" autocomplete="off">
           <button class="btn small primary" type="submit">Enviar</button>

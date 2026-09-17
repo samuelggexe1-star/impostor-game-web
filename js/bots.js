@@ -17,7 +17,38 @@ export const BOT_NAMES = [
 ];
 
 /**
+ * Lectura del rival a partir de lo que lleva hecho en la mesa.
+ * @returns {number} 0 = pasivo como una piedra, 1 = sube por todo
+ */
+function lecturaAgresion(p) {
+  const s = p && p.stats;
+  if (!s || !s.hands) return 0.25;            // sin datos, un poco de credito
+  const manos = Math.max(1, s.hands);
+  const subidasPorMano = (s.raises || 0) / manos;
+  const entradas = (s.vpip || 0) / manos;
+  const acciones = (s.raises || 0) + (s.calls || 0) + (s.folds || 0);
+  const proporcionSubidas = acciones ? (s.raises || 0) / acciones : 0;
+  return Math.min(1, subidasPorMano * 0.5 + entradas * 0.25 + proporcionSubidas * 0.6);
+}
+
+/** Fuerza real de la mano: contra cuantos y con que board. */
+function fuerzaDeMano(hole, board, rivales) {
+  if (board.length === 0) {
+    const eq = equity(hole, [], rivales, 260);
+    const premio = Math.min(0.12, chenScore(hole) / 160);   // premia las manotas
+    return Math.min(0.97, eq.win + eq.tie * 0.5 + premio);
+  }
+  const eq = equity(hole, board, rivales, 420);
+  return eq.win + eq.tie * 0.5;
+}
+
+/**
  * Decide la accion de un bot.
+ *
+ * La idea: no basta con mirar las propias cartas. Si alguien sube en todas las
+ * manos, su rango es mucho mas flojo de lo que aparenta y hay que pagarle mas
+ * a menudo; si no, cualquiera se lleva todos los botes subiendo a lo bestia.
+ *
  * @param {object} view snapshot del motor visto por el bot (con sus cartas)
  * @param {object} legal acciones legales
  * @returns {{action:string, amount:number}}
@@ -27,47 +58,78 @@ export function decide(view, legal, style = 'solido') {
   const me = view.players.find((p) => p && p.isYou);
   if (!me || !me.hole) return { action: legal.canCheck ? 'check' : 'fold' };
 
-  const rivals = view.players.filter((p) => p && !p.isYou && (p.status === 'active' || p.status === 'allin')).length;
-  const pot = Math.max(1, view.potTotal + view.streetBets);
-  const toCall = legal.toCall;
-  const potOdds = toCall / (pot + toCall);
-  const jitter = (n) => (Math.random() - 0.5) * n;
+  const vivos = view.players.filter(
+    (p) => p && !p.isYou && (p.status === 'active' || p.status === 'allin')
+  );
+  const rivales = Math.max(1, vivos.length);
+  const bote = Math.max(1, view.potTotal + view.streetBets);
+  const pagar = legal.toCall;
+  const oddsBote = pagar > 0 ? pagar / (bote + pagar) : 0;
+  const relativo = pagar / bote;                 // lo que pide respecto al bote
+  const azar = () => Math.random();
 
-  let strength;
-  if (view.board.length === 0) {
-    // Preflop: Chen normalizado a 0..1 (20 es AA).
-    strength = Math.min(1, chenScore(me.hole) / 20);
-    const openness = S.vpip;
-    if (strength < 0.28 * (1 - openness + 0.5) && toCall > 0) {
-      const defend = strength > 0.2 && potOdds < 0.12;
-      if (!defend) return fold(legal);
+  // --- ¿Quien ha subido y como de creible es? ---
+  const agresor = vivos.find(
+    (p) => p.lastAction && (p.lastAction.type === 'raise' || p.lastAction.type === 'bet')
+  );
+  const agresion = agresor ? lecturaAgresion(agresor) : 0.2;
+  // Una subida desproporcionada respecto al bote huele todavia mas a farol.
+  const desproporcion = Math.min(0.3, Math.max(0, relativo - 0.9) * 0.3);
+  const farol = Math.min(0.62, agresion * 0.6 + desproporcion);
+
+  // --- Fuerza propia ---
+  const fuerza = fuerzaDeMano(me.hole, view.board, rivales);
+  const nervios = (azar() - 0.5) * S.tilt * 0.35;
+  // Contra un rival que sube por todo, nuestra mano vale mas de lo que dice la equity.
+  const fuerzaEfectiva = Math.max(0, Math.min(0.99, fuerza + farol * 0.24 + nervios));
+
+  const puedeSubir = legal.canRaise;
+  const tamañoValor = () => Math.round(bote * (0.55 + azar() * 0.4));
+  const subirA = (extra) => raiseTo(legal, Math.max(legal.minRaiseTo, (view.currentBet || 0) + extra));
+
+  // ------------------------------------------------------------- manos fuertes
+  if (fuerzaEfectiva > 0.80 && puedeSubir && azar() < 0.55 + S.aggr * 0.4) {
+    return subirA(tamañoValor());
+  }
+
+  // --------------------------------------------------- castigar al que sube siempre
+  // Si el agresor lo hace constantemente y tenemos algo, le resubimos.
+  if (puedeSubir && farol > 0.38 && fuerzaEfectiva > 0.45 && azar() < S.aggr * 0.55) {
+    return subirA(Math.round(bote * (0.6 + azar() * 0.3)));
+  }
+
+  // ------------------------------------------------------------- nadie ha apostado
+  if (pagar === 0) {
+    const apuestaValor = fuerzaEfectiva > 0.58 && azar() < S.aggr;
+    const farolPropio = view.board.length >= 3 && fuerza < 0.35 && azar() < S.bluff;
+    if (puedeSubir && (apuestaValor || farolPropio)) {
+      return subirA(Math.round(bote * (farolPropio ? 0.45 + azar() * 0.25 : 0.5 + azar() * 0.35)));
     }
-  } else {
-    const eq = equity(me.hole, view.board, Math.max(1, rivals), 320);
-    strength = eq.win + eq.tie * 0.5;
+    return { action: 'check', amount: 0 };
   }
 
-  const adjusted = Math.max(0, Math.min(1, strength + jitter(S.tilt * 0.4)));
-  const bluffing = Math.random() < S.bluff && view.board.length >= 3;
-  const wantsAggression = adjusted > 0.62 || (bluffing && adjusted < 0.35);
-  const bigBet = Math.round(pot * (0.55 + Math.random() * 0.35));
+  // ------------------------------------------------------------------ hay que pagar
+  // Umbral de equity necesario, rebajado segun lo farolero que parezca el rival.
+  const margen = 0.035 * (1 - S.aggr);
+  const umbral = Math.max(0.1, oddsBote * (1 - farol * 0.5) + margen);
 
-  // Mano monstruo: sube casi siempre para construir bote.
-  if (adjusted > 0.85 && legal.canRaise && Math.random() < 0.85) {
-    return raiseTo(legal, Math.max(legal.minRaiseTo, (view.currentBet || 0) + bigBet));
+  if (fuerzaEfectiva >= umbral) return { action: 'call', amount: pagar };
+
+  // Precio ridiculo: se paga casi con cualquier cosa.
+  if (oddsBote < 0.14 && fuerza > 0.16) return { action: 'call', amount: pagar };
+
+  // Defensa minima: nadie puede robar todos los botes a base de subir. Con una
+  // mano decente y un precio razonable, se paga una parte de las veces.
+  if (fuerzaEfectiva > 0.30 && relativo <= 1.2) {
+    const ganas = 0.24 + farol * 0.5 + (fuerzaEfectiva - 0.30) * 0.75;
+    if (azar() < Math.min(0.78, ganas)) return { action: 'call', amount: pagar };
   }
 
-  if (wantsAggression && legal.canRaise && Math.random() < S.aggr) {
-    const size = bluffing ? Math.round(pot * (0.4 + Math.random() * 0.3)) : bigBet;
-    return raiseTo(legal, Math.max(legal.minRaiseTo, (view.currentBet || 0) + size));
+  // Cazar el farol de vez en cuando aunque la mano sea mediocre.
+  if (farol > 0.45 && fuerza > 0.24 && azar() < S.bluff + 0.08) {
+    return { action: 'call', amount: pagar };
   }
 
-  if (toCall === 0) return { action: 'check', amount: 0 };
-
-  // Paga si la equity supera las probabilidades del bote (con margen por estilo).
-  const margin = 0.03 + (1 - S.aggr) * 0.05;
-  if (adjusted > potOdds + margin) return { action: 'call', amount: toCall };
-  if (adjusted > potOdds - 0.04 && Math.random() < S.vpip) return { action: 'call', amount: toCall };
   return fold(legal);
 }
 

@@ -98,6 +98,8 @@ export class TableUI {
       btnSitOut: $('btnSitOut'),
       // panel
       chatLog: $('chatLog'),
+      chatBadge: $('chatBadge'),
+      chatQuick: $('chatQuick'),
       historyList: $('historyList'),
       statsList: $('statsList'),
       toast: $('toast')
@@ -105,6 +107,7 @@ export class TableUI {
 
     initConfetti(this.el.confetti);
     this.buildEmotes();
+    this.buildQuickChat();
     this.bindControls();
     this.startClock();
     window.addEventListener('resize', () => {
@@ -220,6 +223,19 @@ export class TableUI {
       S.bet.style.top = betPt.y.toFixed(2) + '%';
     });
     return order;
+  }
+
+  buildQuickChat() {
+    const frases = ['¡Buena mano!', 'Voy con todo 😤', 'Me la juego', 'Qué suerte tienes', 'Paso, paso…', 'gg'];
+    this.el.chatQuick.innerHTML = '';
+    for (const f of frases) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'quick-msg';
+      b.textContent = f;
+      b.onclick = () => this.session.chat(f);
+      this.el.chatQuick.appendChild(b);
+    }
   }
 
   buildEmotes() {
@@ -909,6 +925,8 @@ export class TableUI {
           break;
         case 'chat':
           sfx.chat();
+          this.showSpeech(ev.msg);
+          this.bumpChatBadge();
           break;
         case 'emote':
           this.throwEmote(ev, view);
@@ -1095,6 +1113,53 @@ export class TableUI {
     } else if (me && me.status !== 'folded' && me.holeCount > 0) {
       sfx.lose();
     }
+  }
+
+  /** Lo que alguien dice aparece sobre su sitio, para enterarte sin abrir nada. */
+  showSpeech(msg) {
+    if (!msg || msg.system) return;
+    const S = this.seatEls.get(msg.seat);
+    const el = document.createElement('div');
+    el.className = 'speech';
+    el.innerHTML = `<span class="who">${escapeHtml(msg.from)}</span>${escapeHtml(msg.text)}`;
+
+    if (S) {
+      // Solo una burbuja por jugador: si llega otra, la anterior se va.
+      clearTimeout(S.speechTimer);
+      if (S.speechEl) S.speechEl.remove();
+      // Se ancla por encima de las cartas, no del nombre, para no taparlas.
+      const conCartas = S.cardEls.length ? S.cards : S.root;
+      const r = rectIn(conCartas, this.el.fx);
+      el.style.left = r.cx + 'px';
+      el.style.top = (r.y - 8) + 'px';
+    } else {
+      el.style.left = '50%';
+      el.style.top = '18%';
+    }
+    this.el.fx.appendChild(el);
+    const quitar = setTimeout(() => {
+      el.classList.add('fade');
+      setTimeout(() => el.remove(), 450);
+    }, ms(4200));
+    if (S) {
+      S.speechTimer = quitar;
+      S.speechEl = el;
+    }
+  }
+
+  /** Cuenta los mensajes que llegan con el chat cerrado. */
+  bumpChatBadge() {
+    const abierto = document.getElementById('sidePanel').classList.contains('open') &&
+      document.querySelector('.side-view[data-view="chat"]').classList.contains('active');
+    if (abierto) return;
+    this.sinLeer = (this.sinLeer || 0) + 1;
+    this.el.chatBadge.textContent = this.sinLeer > 9 ? '9+' : String(this.sinLeer);
+    this.el.chatBadge.hidden = false;
+  }
+
+  clearChatBadge() {
+    this.sinLeer = 0;
+    this.el.chatBadge.hidden = true;
   }
 
   throwEmote(ev, view) {
