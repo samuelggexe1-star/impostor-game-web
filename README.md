@@ -169,7 +169,7 @@ enteros desde Node.
 ## Pruebas
 
 ```bash
-npm test          # 108 pruebas, sin dependencias externas
+npm test          # 112 pruebas, sin dependencias externas
 ```
 
 Cubren las reglas que más fácil se rompen:
@@ -185,6 +185,9 @@ Cubren las reglas que más fácil se rompen:
 - **Servidor**: que reparta sin que nadie haga de crupier, que a cada jugador solo le
   lleguen sus cartas, que solo quien creó la sala pueda cambiarla, que puedas
   reconectar conservando tus fichas, y que nadie de fuera pueda mandarle nada.
+- **Caos**: los cuatro juegos corriendo solos mientras la gente entra, se va, se
+  ausenta y vuelve a mitad de partida. Es la que más bugs raros ha pillado: los que
+  solo salen cuando alguien cierra la tapa del iPad en el peor momento.
 
 ## Limitaciones
 
