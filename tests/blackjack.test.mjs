@@ -224,3 +224,38 @@ test('el zapato se rebaraja cuando se queda corto', () => {
   g.sacar();
   assert.ok(g.zapato.length > antes, 'se rehace el zapato');
 });
+
+test('el blackjack sale con la frecuencia que dicen las matematicas', () => {
+  // Con una baraja bien barajada sale blackjack en un 4,75% de las manos.
+  // Si esto se dispara o se hunde, algo va mal en el reparto o en el zapato.
+  const g = new BlackjackGame({ rng: mulberry32(98765) });
+  for (const n of ['Ana', 'Bea', 'Cris']) g.sentar({ id: n, name: n });
+
+  let manos = 0;
+  let bj = 0;
+  for (let r = 0; r < 1200; r++) {
+    for (const p of g.jugadores) p.fichas = 1000000;
+    g.abrirApuestas();
+    for (const p of g.jugadores) g.apostar(p.id, 10);
+    if (g.estado === 'apuestas') g.repartir();
+    if (!g.jugadores[0].manos.length) break;
+    for (const p of g.jugadores) {
+      for (const m of p.manos) {
+        manos++;
+        if (esBlackjack(m)) bj++;
+      }
+    }
+    let vueltas = 0;
+    while (g.estado === 'turnos' && vueltas++ < 80) {
+      const p = g.actual();
+      if (!p) break;
+      g.plantarse(p.id);
+    }
+    if (g.estado === 'banca') g.jugarBanca();
+    if (g.estado === 'pagos') g.pagar();
+  }
+
+  assert.ok(manos > 3000, `deberian jugarse muchas manos, se jugaron ${manos}`);
+  const tasa = bj / manos;
+  assert.ok(tasa > 0.03 && tasa < 0.07, `blackjack en el ${(tasa * 100).toFixed(2)}% de las manos, fuera de lo razonable`);
+});

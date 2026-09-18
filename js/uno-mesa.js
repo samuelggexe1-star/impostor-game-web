@@ -3,6 +3,7 @@
 // servidor y el cliente la manejan igual.
 
 import { Emitter } from './table.js';
+import { Charla } from './charla.js';
 import { UnoGame, COLORES, esComodin } from './uno.js';
 
 export const CONFIG_UNO = {
@@ -30,6 +31,7 @@ export class UnoMesa extends Emitter {
     this.historial = [];
     this.lastProgress = Date.now();
     this.watchdog = null;
+    this.charla = new Charla(this);
   }
 
   // -------------------------------------------------------------- utilidades
@@ -72,7 +74,18 @@ export class UnoMesa extends Emitter {
   publish() {
     const eventos = this.game.vaciarEventos().concat(this.pendingEvents);
     this.pendingEvents = [];
+    this.comentar(eventos);
     this.emit('update', eventos);
+  }
+
+  /** Los bots pican algo cuando pasa algo gordo. Adorno, nada más. */
+  comentar(eventos) {
+    for (const ev of eventos) {
+      if (ev.t === 'uno') this.charla.decir('unoCantado');
+      else if (ev.t === 'pillado') this.charla.decir('pillado');
+      else if (ev.t === 'roba' && ev.motivo === 'mas4') this.charla.decir('masCuatro');
+      else if (ev.t === 'finRonda') this.charla.decir('ganaRonda', ev.ganador);
+    }
   }
 
   // --------------------------------------------------------------- jugadores

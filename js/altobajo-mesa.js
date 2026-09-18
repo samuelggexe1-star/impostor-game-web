@@ -2,6 +2,7 @@
 // Como todos apuestan a la vez, la mesa solo controla el reloj.
 
 import { Emitter } from './table.js';
+import { Charla } from './charla.js';
 import { AltoBajoGame } from './altobajo.js';
 
 export const CONFIG_AB = {
@@ -28,6 +29,7 @@ export class AltoBajoMesa extends Emitter {
     this.historial = [];
     this.lastProgress = Date.now();
     this.watchdog = null;
+    this.charla = new Charla(this);
   }
 
   delay(k) {
@@ -68,7 +70,22 @@ export class AltoBajoMesa extends Emitter {
   publish() {
     const eventos = this.game.vaciarEventos().concat(this.pendingEvents);
     this.pendingEvents = [];
+    this.comentar(eventos);
     this.emit('update', eventos);
+  }
+
+  /** Los bots pican algo cuando pasa algo gordo. Adorno, nada más. */
+  comentar(eventos) {
+    for (const ev of eventos) {
+      if (ev.t !== 'revela' || !ev.detalle) continue;
+      const enRacha = ev.detalle.find((d) => d.resultado === 'acierta' && d.racha >= 4);
+      if (enRacha) { this.charla.decir('racha'); continue; }
+      const bots = new Set(this.charla.bots().map((b) => b.id));
+      const acierta = ev.detalle.find((d) => d.resultado === 'acierta' && bots.has(d.id));
+      const falla = ev.detalle.find((d) => d.resultado === 'falla' && bots.has(d.id));
+      if (acierta) this.charla.decir('acierto', acierta.id);
+      else if (falla) this.charla.decir('fallo', falla.id);
+    }
   }
 
   // --------------------------------------------------------------- jugadores

@@ -2,6 +2,7 @@
 // tiempos, los bots y el chat. Misma interfaz que las demas mesas.
 
 import { Emitter } from './table.js';
+import { Charla } from './charla.js';
 import { BlackjackGame, valorMano } from './blackjack.js';
 
 export const CONFIG_BJ = {
@@ -36,6 +37,7 @@ export class BlackjackMesa extends Emitter {
     this.historial = [];
     this.lastProgress = Date.now();
     this.watchdog = null;
+    this.charla = new Charla(this);
   }
 
   delay(k) {
@@ -76,7 +78,22 @@ export class BlackjackMesa extends Emitter {
   publish() {
     const eventos = this.game.vaciarEventos().concat(this.pendingEvents);
     this.pendingEvents = [];
+    this.comentar(eventos);
     this.emit('update', eventos);
+  }
+
+  /** Los bots pican algo cuando pasa algo gordo. Adorno, nada más. */
+  comentar(eventos) {
+    for (const ev of eventos) {
+      if (ev.t === 'pasado') {
+        const p = this.game.porId(ev.id);
+        if (p && p.esBot) this.charla.decir('pasado', p.id);
+      } else if (ev.t === 'pagos' && ev.resultados) {
+        const hayBJ = (ev.resultados.detalle || []).some((d) => d.resultado === 'blackjack');
+        if (hayBJ) this.charla.decir('blackjack');
+        else if (this.game.banca && valorMano(this.game.banca.cartas).total > 21) this.charla.decir('bancaSePasa');
+      }
+    }
   }
 
   // --------------------------------------------------------------- jugadores

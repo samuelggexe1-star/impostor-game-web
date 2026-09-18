@@ -2,6 +2,7 @@
 // y publica el estado. Es lo que ejecuta el anfitrion de la sala.
 
 import { Game, STAGE } from './engine.js';
+import { Charla } from './charla.js';
 import { decide as botDecide, STYLES } from './bots.js';
 
 export class Emitter {
@@ -87,6 +88,7 @@ export class Table extends Emitter {
     this.paused = false;
     this.lastProgress = Date.now();
     this.watchdog = null;
+    this.charla = new Charla(this);
   }
 
   // -------------------------------------------------------------- utilidades
@@ -480,6 +482,14 @@ export class Table extends Emitter {
     }
     const res = this.game.act(p.id, move.action, move.amount);
     if (!res.ok) this.game.act(p.id, legal.canCheck ? 'check' : 'fold');
+    // Un comentario cuando el bot hace algo llamativo.
+    if (move.action === 'allin' || (move.amount && move.amount >= p.chips + p.committed)) {
+      this.charla.decir('allin', p.id);
+    } else if (move.action === 'raise' && move.amount >= this.game.potTotal() * 0.9) {
+      this.charla.decir('granSubida', p.id);
+    } else if (move.action === 'fold' && legal.toCall >= this.game.bb * 6) {
+      this.charla.decir('meVoy', p.id);
+    }
     this.publish();
     this.step();
   }
@@ -559,11 +569,18 @@ export class Table extends Emitter {
         }))
       });
       if (this.history.length > 50) this.history.pop();
+      let mayor = 0;
+      let ganadorGordo = null;
       for (const pot of results.pots) {
         for (const w of pot.winners) {
           const win = g.seats[w.seat];
           if (win) this.system(`${win.name} gana ${w.amount}${w.eval ? ` con ${w.eval.name}` : ''}`);
+          if (w.amount > mayor) { mayor = w.amount; ganadorGordo = win; }
         }
+      }
+      // Los bots comentan solo si el bote ha sido de los que se recuerdan.
+      if (ganadorGordo && mayor >= g.bb * 20) {
+        this.charla.decir(ganadorGordo.isBot ? 'ganaBote' : 'ganaBote');
       }
     }
     this.lastResultAt = Date.now();
