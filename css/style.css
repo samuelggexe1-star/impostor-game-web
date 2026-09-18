@@ -2004,3 +2004,43 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .fin-partida .fp-tabla .fp-nombre { flex: 1; text-align: left; font-weight: 600; }
 .fin-partida .fp-tabla .fp-puntos { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
 .fin-partida .fp-botones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+
+/* ---------------- tamaño mínimo para dedos (iPad, móvil) ---------------- */
+/* Apple pide 44 px de lado; varios botones pequeños se quedaban en 32. */
+@media (pointer: coarse) {
+  .btn.small,
+  .chip-btn,
+  .emote-btn,
+  .side-tab,
+  .tab,
+  .bj-ficha,
+  #btnSitOut,
+  #btnChangeAvatar,
+  #unoOrden,
+  #bjConfirmar,
+  #bjQuitar {
+    min-height: 44px;
+  }
+  .emote-btn, .bj-ficha, #bjQuitar { min-width: 44px; }
+  .chip-btn { padding-top: 10px; padding-bottom: 10px; }
+  /* Las casillas de acción anticipada: lo que se toca es la etiqueta entera. */
+  .pre-actions label { min-height: 44px; }
+  .pre-actions input[type="checkbox"] { width: 22px; height: 22px; }
+}
+
+/* ------------- pantallas muy bajas (un móvil puesto en horizontal) -------- */
+/* Con 390 px de alto la mesa de póker va justa y las cartas de los asientos
+   se salían por arriba. Se encoge todo un poco en vez de recortarlo. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .seat-cards .card { --cw: clamp(22px, 3.4vw, 34px); }
+  .board .card { --cw: clamp(26px, 4vw, 40px); }
+  .seat-body { padding: 4px 8px; }
+  .seat .seat-name { font-size: .72rem; }
+  .seat .seat-chips { font-size: .7rem; }
+  .action-bar { padding-top: 6px; padding-bottom: 6px; }
+  .bet-panel { gap: 4px; }
+  .hand-hud { font-size: .78rem; }
+  .uno-mano { padding-top: 6px; padding-bottom: 4px; }
+  .bj-area { gap: clamp(8px, 2vh, 20px); }
+  .ab-centro { gap: 6px; }
+}
