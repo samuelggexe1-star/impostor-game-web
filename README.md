@@ -169,8 +169,14 @@ enteros desde Node.
 ## Pruebas
 
 ```bash
-npm test          # 112 pruebas, sin dependencias externas
+npm test          # 114 pruebas, sin dependencias externas
 ```
+
+Para saber si las pruebas valen de algo, se han roto las reglas a propósito
+(mutation testing) y se ha comprobado que saltan: subida mínima a la mitad,
+full contado como color, escalera al as bajo desactivada, ciegas heads-up
+invertidas, botes laterales fundidos en uno y el blackjack pagando 1 a 1.
+Las seis se detectan.
 
 Cubren las reglas que más fácil se rompen:
 
