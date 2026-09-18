@@ -87,14 +87,31 @@ test('pasarse de 21 pierde aunque la banca tambien se pase', () => {
   assert.equal(p.fichas, 900, 'la casa cobra primero');
 });
 
-test('la banca pide hasta 17 y se planta', () => {
+test('la banca pide hasta 17 y se planta ahi, ni antes ni despues', () => {
   const g = mesa(['ana']);
   const p = montar(g, { jugador: 'Kh Qd', banca: '5h 6c', apuesta: 100 });
   p.manos[0].estado = 'plantado';
   g.estado = 'banca';
   g.jugarBanca();
+
   const total = valorMano(g.banca.cartas).total;
-  assert.ok(total >= 17, `la banca se planta en ${total}`);
+  assert.ok(total >= 17, `la banca se planta en ${total}, deberia seguir pidiendo`);
+
+  // Y tampoco puede pedir de mas: rehacemos la mano carta a carta y miramos
+  // que en ningun momento pidiera teniendo ya 17 o mas.
+  for (let n = 2; n < g.banca.cartas.length; n++) {
+    const antes = valorMano(g.banca.cartas.slice(0, n)).total;
+    assert.ok(antes < 17, `la banca pidio teniendo ${antes}, deberia haberse plantado`);
+  }
+});
+
+test('con 17 de salida la banca no pide nada', () => {
+  const g = mesa(['ana']);
+  const p = montar(g, { jugador: 'Kh Qd', banca: 'Kh 7c', apuesta: 100 });
+  p.manos[0].estado = 'plantado';
+  g.estado = 'banca';
+  g.jugarBanca();
+  assert.equal(g.banca.cartas.length, 2, 'no deberia haber pedido ninguna carta');
 });
 
 test('la banca no juega si todos se han pasado', () => {
@@ -258,4 +275,60 @@ test('el blackjack sale con la frecuencia que dicen las matematicas', () => {
   assert.ok(manos > 3000, `deberian jugarse muchas manos, se jugaron ${manos}`);
   const tasa = bj / manos;
   assert.ok(tasa > 0.03 && tasa < 0.07, `blackjack en el ${(tasa * 100).toFixed(2)}% de las manos, fuera de lo razonable`);
+});
+
+test('la banca gana a la larga lo que dicen las matematicas, ni mas ni menos', () => {
+  // Jugando con estrategia basica pero sin doblar ni dividir, la ventaja de
+  // la casa ronda el 2%. Si los pagos se rompen se nota enseguida: pagar el
+  // blackjack 1 a 1 la dispara, y no cobrar los empates la hunde.
+  const estrategia = (mano, arriba) => {
+    const v = valorMano(mano.cartas);
+    const up = arriba ? (arriba.r >= 10 ? 10 : arriba.r === 14 ? 11 : arriba.r) : 10;
+    if (v.blanda) {
+      if (v.total >= 19) return 'plantarse';
+      if (v.total === 18) return up >= 9 ? 'pedir' : 'plantarse';
+      return 'pedir';
+    }
+    if (v.total >= 17) return 'plantarse';
+    if (v.total >= 13) return up >= 7 ? 'pedir' : 'plantarse';
+    if (v.total === 12) return (up >= 4 && up <= 6) ? 'plantarse' : 'pedir';
+    return 'pedir';
+  };
+
+  const g = new BlackjackGame({ rng: mulberry32(4242) });
+  g.sentar({ id: 'a', name: 'Ana' });
+  const APUESTA = 10;
+  const INICIO = 10000000;
+  g.porId('a').fichas = INICIO;
+
+  let apostado = 0;
+  let rondas = 0;
+  for (let r = 0; r < 8000; r++) {
+    g.abrirApuestas();
+    if (g.porId('a').fichas < APUESTA) break;
+    g.apostar('a', APUESTA);
+    if (g.estado === 'apuestas') g.repartir();
+    if (!g.porId('a').manos.length) break;
+    apostado += APUESTA;
+    rondas++;
+    let vueltas = 0;
+    while (g.estado === 'turnos' && vueltas++ < 30) {
+      const p = g.actual();
+      if (!p) break;
+      const mano = p.manos[g.manoActiva];
+      if (!mano) { g.plantarse(p.id); continue; }
+      const q = estrategia(mano, g.banca.cartas[0]);
+      const res = q === 'pedir' ? g.pedir(p.id) : g.plantarse(p.id);
+      if (!res || !res.ok) g.plantarse(p.id);
+    }
+    if (g.estado === 'banca') g.jugarBanca();
+    if (g.estado === 'pagos') g.pagar();
+  }
+
+  assert.ok(rondas > 5000, `deberian jugarse muchas rondas, se jugaron ${rondas}`);
+  const ventaja = -(g.porId('a').fichas - INICIO) / apostado;
+  assert.ok(
+    ventaja > 0 && ventaja < 0.05,
+    `la banca se lleva el ${(ventaja * 100).toFixed(2)}% de lo apostado, fuera de lo razonable`
+  );
 });
