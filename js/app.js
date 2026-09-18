@@ -614,7 +614,7 @@ function entrarUno(session, code) {
   session.refresh();
 }
 
-function bindPanelCompartido(session) {
+function bindPanelCompartido(session, opciones = {}) {
   $('chatForm').onsubmit = (e) => {
     e.preventDefault();
     const input = $('chatInput');
@@ -634,16 +634,71 @@ function bindPanelCompartido(session) {
       if (tab.dataset.side === 'chat' && state.ui && state.ui.clearChatBadge) state.ui.clearChatBadge();
     };
   });
+  bindAjustes();
+  bindControlesMesa(session, opciones);
+}
+
+/** Los ajustes son del dispositivo, no de la partida: valen para todo. */
+function bindAjustes() {
+  const sv = $('setVolume');
+  sv.value = String(Math.round(state.settings.volume * 100));
+  sv.oninput = () => {
+    state.settings.volume = sv.value / 100;
+    state.settings.sound = state.settings.volume > 0;
+    saveSettings();
+    applySettings();
+  };
+
+  const sp = $('setSpeed');
+  sp.value = String(state.settings.speed);
+  sp.oninput = () => {
+    state.settings.speed = Number(sp.value);
+    saveSettings();
+    applySettings();
+  };
+
+  const bindSwitch = (id, key) => {
+    const el = $(id);
+    el.checked = !!state.settings[key];
+    el.onchange = () => {
+      state.settings[key] = el.checked;
+      saveSettings();
+      applySettings();
+      if (state.ui && state.ui.view && state.ui.render) state.ui.render(state.ui.view);
+    };
+  };
+  bindSwitch('setFourColor', 'fourColor');
+  bindSwitch('setEquity', 'equity');
+  bindSwitch('setConfetti', 'confetti');
+
+  const felt = $('setFelt');
+  felt.value = state.settings.felt;
+  felt.onchange = () => {
+    state.settings.felt = felt.value;
+    saveSettings();
+    applySettings();
+  };
+}
+
+/** Añadir bot, pausar y reanudar: los tiene cualquier mesa, no solo el póker. */
+function bindControlesMesa(session, { rebuy = false } = {}) {
+  $('hostControls').style.display = session.isHost ? '' : 'none';
+  $('btnRebuy').hidden = !rebuy;
+  $('btnAddBot').onclick = () => session.command('addBot', {});
+  $('btnPause').onclick = () => {
+    session.command('pause', {});
+    $('btnPause').textContent = state.table && state.table.paused ? 'Pausar' : 'Reanudar';
+  };
+  $('btnResume').onclick = () => {
+    session.command('resume', {});
+    if (state.ui && state.ui.toast) state.ui.toast('Reanudando la mesa…');
+  };
+  $('btnRebuy').onclick = () => session.command('rebuy', {});
 }
 
 function bindUnoControles(session, code) {
-  bindPanelCompartido(session);
-  // Los controles de mesa del poker no pintan nada en el UNO.
-  $('hostControls').style.display = session.isHost ? '' : 'none';
-  $('btnRebuy').hidden = true;
-  $('btnAddBot').onclick = () => session.command('addBot', {});
-  $('btnPause').onclick = () => session.command('pause', {});
-  $('btnResume').onclick = () => session.command('resume', {});
+  // En el UNO no hay fichas que recargar.
+  bindPanelCompartido(session, { rebuy: false });
 
   $('unoLeave').onclick = () => {
     if (!confirm('¿Salir de la partida?')) return;
@@ -791,7 +846,7 @@ function entrarJuego(cfg, session, code) {
   const ui = new cfg.UI({ session, settings: state.settings });
   state.ui = ui;
   ui.init();
-  bindPanelCompartido(session);
+  bindPanelCompartido(session, { rebuy: cfg.juego === 'blackjack' });
 
   const seccion = document.getElementById(cfg.pantalla);
   seccion.querySelector('[data-salir-juego]').onclick = () => {
@@ -1034,8 +1089,7 @@ function enterGame(session, code) {
 }
 
 function bindGameControls(session, code) {
-  bindPanelCompartido(session);
-  $('btnRebuy').hidden = false;
+  bindPanelCompartido(session, { rebuy: true });
   $('btnPanel').onclick = () => $('sidePanel').classList.toggle('open');
 
   const abrirChat = () => {
@@ -1089,60 +1143,6 @@ function bindGameControls(session, code) {
   $('btnLeave').onclick = () => {
     if (!confirm('¿Salir de la mesa?')) return;
     leaveGame();
-  };
-
-  // Ajustes
-  const sv = $('setVolume');
-  sv.value = String(Math.round(state.settings.volume * 100));
-  sv.oninput = () => {
-    state.settings.volume = sv.value / 100;
-    state.settings.sound = state.settings.volume > 0;
-    saveSettings();
-    applySettings();
-  };
-
-  const sp = $('setSpeed');
-  sp.value = String(state.settings.speed);
-  sp.oninput = () => {
-    state.settings.speed = Number(sp.value);
-    saveSettings();
-    applySettings();
-  };
-
-  const bindSwitch = (id, key) => {
-    const el = $(id);
-    el.checked = !!state.settings[key];
-    el.onchange = () => {
-      state.settings[key] = el.checked;
-      saveSettings();
-      applySettings();
-      if (state.ui && state.ui.view) state.ui.render(state.ui.view);
-    };
-  };
-  bindSwitch('setFourColor', 'fourColor');
-  bindSwitch('setEquity', 'equity');
-  bindSwitch('setConfetti', 'confetti');
-
-  const felt = $('setFelt');
-  felt.value = state.settings.felt;
-  felt.onchange = () => {
-    state.settings.felt = felt.value;
-    saveSettings();
-    applySettings();
-  };
-
-  // Controles de anfitrion
-  const hostControls = $('hostControls');
-  hostControls.style.display = session.isHost ? '' : 'none';
-  $('btnAddBot').onclick = () => session.command('addBot', {});
-  $('btnPause').onclick = () => {
-    session.command('pause', {});
-    $('btnPause').textContent = state.table && state.table.paused ? 'Pausar' : 'Reanudar';
-  };
-  $('btnRebuy').onclick = () => session.command('rebuy', {});
-  $('btnResume').onclick = () => {
-    session.command('resume', {});
-    if (state.ui) state.ui.toast('Reanudando la mesa…');
   };
 
   window.addEventListener('beforeunload', (e) => {
