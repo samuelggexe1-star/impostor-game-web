@@ -1165,7 +1165,7 @@ function bindGameControls(session, code) {
     const url = `${inviteOrigin()}${location.pathname}?sala=${code}`;
     const text = `Te invito a jugar al Texas Hold'em. Sala ${code}: ${url}`;
     try {
-      if (navigator.share) await navigator.share({ title: "Hold'em Club", text, url });
+      if (navigator.share) await navigator.share({ title: "Texas Hold'em", text, url });
       else {
         await navigator.clipboard.writeText(url);
         state.ui.toast('Invitación copiada al portapapeles');
@@ -1240,12 +1240,16 @@ async function detectServer() {
         } catch (_) {}
       };
     }
+    const pistaOk = $('joinHint');
+    if (pistaOk) pistaOk.textContent = 'La mesa vive en el servidor: nadie tiene que dejar el móvil encendido.';
     refreshRooms();
     refrescarSalasHub();
     return;
   }
 
   // Sin servidor: avisamos de que se usara conexion directa, que es mas fragil.
+  const pista = $('joinHint');
+  if (pista) pista.textContent = 'Sin servidor: quien creó la mesa reparte, así que no puede cerrar la pestaña.';
   banner.hidden = false;
   banner.className = 'lan-banner warn';
   banner.innerHTML = `<span><b>Sin servidor de partidas.</b> Se intentará conexión directa entre
