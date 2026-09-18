@@ -1873,7 +1873,9 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .bj-estado { color: var(--muted); font-size: .9rem; text-align: center; }
 .bj-estado b { color: var(--gold); }
 .bj-aviso {
-  position: absolute; left: 50%; top: 30%;
+  /* Arriba del todo: al 30% caía justo encima de las cartas de la banca y
+     tapaba el resultado en el momento en que más quieres verlo. */
+  position: absolute; left: 50%; top: 13%;
   transform: translate(-50%, -50%);
   padding: 14px 30px; border-radius: 16px;
   background: linear-gradient(160deg, rgba(20,30,54,.97), rgba(10,16,30,.97));
