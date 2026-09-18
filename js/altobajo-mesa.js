@@ -7,6 +7,7 @@ import { AltoBajoGame } from './altobajo.js';
 export const CONFIG_AB = {
   segundosPorCarta: 10,
   vidas: 3,
+  objetivo: 30,          // puntos para ganar la partida entera
   speed: 1
 };
 
@@ -165,6 +166,7 @@ export class AltoBajoMesa extends Emitter {
 
   maybeStart() {
     if (!this.running || this.paused) return;
+    if (this.campeon) return;              // partida acabada: espera a otra
     if (this.game.estado === 'apuestas') return;
     if (!this.game.jugadores.length) {
       this.publish();
@@ -203,9 +205,11 @@ export class AltoBajoMesa extends Emitter {
   apostarBot(p) {
     const g = this.game;
     if (g.estado !== 'apuestas' || !p.vivo || p.apuesta) return;
+    // Cuentan las cartas que quedan, como haria cualquiera mirando el
+    // historial, pero se despistan de vez en cuando para no ser perfectos.
+    const pr = g.probabilidades();
     const r = g.carta ? g.carta.r : 8;
-    // Probabilidad real de que suba, mas algo de despiste para que no sean perfectos
-    const probSube = (14 - r) / 12;
+    const probSube = pr ? pr.alto / Math.max(1e-6, pr.alto + pr.bajo) : (14 - r) / 12;
     const acierto = 0.82;                     // cuanto se fian de la logica
     const logico = probSube > 0.5 ? 'alto' : 'bajo';
     const elige = Math.random() < acierto ? logico : (logico === 'alto' ? 'bajo' : 'alto');
@@ -262,6 +266,39 @@ export class AltoBajoMesa extends Emitter {
     });
     if (this.historial.length > 20) this.historial.pop();
     if (ganador) this.system(`${ganador.nombre} gana la ronda ${g.ronda}`);
+    this.comprobarObjetivo();
+  }
+
+  /**
+   * Las rondas sueltas no acababan nunca en nada. Ahora la partida se juega
+   * a puntos: quien llega al objetivo se lleva el trofeo.
+   */
+  comprobarObjetivo() {
+    if (this.campeon) return;
+    const meta = this.config.objetivo || 30;
+    const candidatos = this.game.jugadores.filter((p) => p.puntos >= meta);
+    if (!candidatos.length) return;
+    candidatos.sort((a, b) => b.puntos - a.puntos || b.rondasGanadas - a.rondasGanadas);
+    const c = candidatos[0];
+    this.campeon = { id: c.id, nombre: c.nombre, avatar: c.avatar, puntos: c.puntos };
+    this.pushEvent({ t: 'finPartida', id: c.id, nombre: c.nombre, puntos: c.puntos, objetivo: meta });
+    this.system(`${c.nombre} gana la partida con ${c.puntos} puntos`);
+  }
+
+  /** Borrón y cuenta nueva sin salir de la sala. */
+  nuevaPartida() {
+    this.campeon = null;
+    this.historial = [];
+    for (const p of this.game.jugadores) {
+      p.puntos = 0;
+      p.rondasGanadas = 0;
+      p.mejorRacha = 0;
+    }
+    this.game.ronda = 0;
+    this.system('Empieza una partida nueva');
+    this.maybeStart();
+    this.publish();
+    return { ok: true };
   }
 
   startWatchdog() {
@@ -284,7 +321,8 @@ export class AltoBajoMesa extends Emitter {
   snapshotFor(id) {
     return {
       ...this.game.snapshot(id),
-      config: { segundosPorCarta: this.config.segundosPorCarta },
+      config: { segundosPorCarta: this.config.segundosPorCarta, objetivo: this.config.objetivo },
+      campeon: this.campeon || null,
       running: this.running,
       paused: this.paused,
       deadline: this.deadline,

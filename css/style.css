@@ -1889,6 +1889,15 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .ab-boton span { font-size: 1.5rem; }
 .ab-boton.alto { background: linear-gradient(180deg, #1c6a45, #12482f); border-color: rgba(53,208,127,.5); }
 .ab-boton.bajo { background: linear-gradient(180deg, #6a2030, #45141f); border-color: rgba(255,95,109,.5); }
+.ab-prob {
+  font-style: normal; font-weight: 800;
+  font-size: .82rem; letter-spacing: .02em;
+  padding: 2px 9px; border-radius: 99px;
+  background: rgba(255,255,255,.1); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  transition: background .25s ease, color .25s ease;
+}
+.ab-boton.favorita .ab-prob { background: rgba(246,196,83,.22); color: var(--gold); }
 .ab-boton.elegida { box-shadow: 0 0 0 3px var(--gold), 0 0 26px rgba(246,196,83,.4); transform: translateY(-2px); }
 .ab-boton:disabled { opacity: .4; }
 .ab-estado { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: .92rem; }
@@ -1943,3 +1952,46 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-12px) rotate(-6deg); }
 }
+
+/* -------------------- pantalla de fin de partida --------------------- */
+.fin-partida {
+  position: absolute; inset: 0; z-index: 60;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 35%, rgba(246,196,83,.14), rgba(5,8,16,.9) 60%);
+  backdrop-filter: blur(9px);
+  padding: 16px;
+}
+.fin-partida .fp-caja {
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 24px 26px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(24,31,50,.96), rgba(14,19,32,.96));
+  border: 1px solid rgba(246,196,83,.4);
+  box-shadow: 0 30px 70px rgba(0,0,0,.6);
+  text-align: center;
+}
+.fin-partida .fp-corona { font-size: 3rem; line-height: 1; animation: fpCorona 2.4s ease-in-out infinite; }
+@keyframes fpCorona {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-10px) rotate(6deg); }
+}
+.fin-partida .fp-titulo { margin: 0; font-size: clamp(1.3rem, 4vw, 1.9rem); color: var(--gold); }
+.fin-partida .fp-sub { margin: 0; color: var(--muted); font-size: .92rem; }
+.fin-partida .fp-tabla {
+  list-style: none; margin: 8px 0 0; padding: 0; width: 100%;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.fin-partida .fp-tabla li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 12px; border-radius: 11px;
+  background: rgba(255,255,255,.05);
+  font-size: .9rem;
+}
+.fin-partida .fp-tabla li.yo { background: rgba(246,196,83,.16); border: 1px solid rgba(246,196,83,.35); }
+.fin-partida .fp-tabla .fp-puesto { width: 22px; color: var(--muted); font-weight: 800; }
+.fin-partida .fp-tabla .fp-nombre { flex: 1; text-align: left; font-weight: 600; }
+.fin-partida .fp-tabla .fp-puntos { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+.fin-partida .fp-botones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }

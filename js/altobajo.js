@@ -190,6 +190,23 @@ export class AltoBajoGame {
     return e;
   }
 
+  /**
+   * Cuántas de las cartas que quedan son más altas, más bajas o iguales.
+   * Es información pública: cualquiera puede contarlo mirando el historial,
+   * así que darla no le quita gracia, se la da (se puede decidir).
+   */
+  probabilidades() {
+    if (!this.carta || !this.mazo.length) return null;
+    let alto = 0, bajo = 0, empate = 0;
+    for (const c of this.mazo) {
+      if (c.r > this.carta.r) alto++;
+      else if (c.r < this.carta.r) bajo++;
+      else empate++;
+    }
+    const total = this.mazo.length;
+    return { alto: alto / total, bajo: bajo / total, empate: empate / total, quedan: total };
+  }
+
   snapshot(viewerId = null) {
     const yo = this.porId(viewerId);
     return {
@@ -202,6 +219,7 @@ export class AltoBajoGame {
       // Solo las ultimas, para no mandar la lista entera cada vez
       reveladas: this.reveladas.slice(-8),
       mazoRestante: this.mazo.length,
+      probabilidades: this.probabilidades(),
       ultimo: this.ultimo,
       tuApuesta: yo ? yo.apuesta : null,
       vidasMax: this.vidas,

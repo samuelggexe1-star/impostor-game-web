@@ -175,6 +175,7 @@ export class UnoMesa extends Emitter {
 
   maybeStart() {
     if (!this.running || this.paused) return;
+    if (this.campeon) return;              // partida acabada: espera a otra
     if (this.game.estado === 'jugando') return;
     if (this.game.jugadores.length < 2) {
       this.publish();
@@ -357,6 +358,39 @@ export class UnoMesa extends Emitter {
     });
     if (this.historial.length > 20) this.historial.pop();
     if (ganador) this.system(`${ganador.nombre} gana la ronda ${g.ronda}`);
+    this.comprobarObjetivo();
+  }
+
+  /**
+   * La partida se juega a puntos (500 por defecto). Antes se decia en el
+   * panel pero no se comprobaba nunca: la partida no acababa jamas.
+   */
+  comprobarObjetivo() {
+    if (this.campeon) return;
+    const meta = this.config.objetivo || 500;
+    const candidatos = this.game.jugadores.filter((p) => p.puntos >= meta);
+    if (!candidatos.length) return;
+    // Si empatan a puntos gana quien mas rondas se haya llevado.
+    candidatos.sort((a, b) => b.puntos - a.puntos || b.rondasGanadas - a.rondasGanadas);
+    const campeon = candidatos[0];
+    this.campeon = { id: campeon.id, nombre: campeon.nombre, avatar: campeon.avatar, puntos: campeon.puntos };
+    this.game.emitir({ t: 'finPartida', id: campeon.id, nombre: campeon.nombre, puntos: campeon.puntos, objetivo: meta });
+    this.system(`${campeon.nombre} gana la partida con ${campeon.puntos} puntos`);
+  }
+
+  /** Borrón y cuenta nueva sin salir de la sala. */
+  nuevaPartida() {
+    this.campeon = null;
+    this.historial = [];
+    for (const p of this.game.jugadores) {
+      p.puntos = 0;
+      p.rondasGanadas = 0;
+    }
+    this.game.ronda = 0;
+    this.system('Empieza una partida nueva');
+    this.maybeStart();
+    this.publish();
+    return { ok: true };
   }
 
   // ----------------------------------------------------------------- vigilante
@@ -404,6 +438,7 @@ export class UnoMesa extends Emitter {
       paused: this.paused,
       deadline: this.deadline,
       now: Date.now(),
+      campeon: this.campeon || null,
       messages: this.messages.slice(-40),
       historial: this.historial.slice(0, 10)
     };

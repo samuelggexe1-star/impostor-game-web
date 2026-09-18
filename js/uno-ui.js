@@ -63,6 +63,7 @@ export class UnoUI {
       net: $('unoNet'),
       chatBadge: $('unoChatBadge'),
       fx: $('unoFx'),
+      fin: $('unoFinPartida'),
       confetti: $('unoConfetti'),
       chatLog: $('chatLog'),
       historyList: $('historyList'),
@@ -71,6 +72,8 @@ export class UnoUI {
     initConfetti(this.el.confetti);
     this._pila = [];
     this._arribaAnterior = null;
+    this._campeonVisto = null;
+    if (this.el.fin) this.el.fin.hidden = true;
     for (const el of [this.el.rivales, this.el.mano, this.el.descarte, this.el.fx]) {
       if (el) el.innerHTML = '';
     }
@@ -331,6 +334,8 @@ export class UnoUI {
         </div>`).join('')
       : '<p class="hint">Aquí aparecerán las rondas jugadas.</p>';
 
+    this.renderFinPartida();
+
     const objetivo = (v.config && v.config.objetivo) || 500;
     this.el.statsList.innerHTML = `<p class="hint">Gana quien llegue a ${objetivo} puntos.</p>` +
       [...v.jugadores]
@@ -341,6 +346,56 @@ export class UnoUI {
           <span class="s-nums"><span>rondas<b>${p.rondasGanadas}</b></span><span>cartas<b>${p.cartas}</b></span></span>
           <span class="s-chips">${p.puntos} pts</span>
         </div>`).join('');
+  }
+
+  /** Cartel de campeón cuando alguien llega al objetivo de puntos. */
+  renderFinPartida() {
+    const el = this.el.fin;
+    if (!el) return;
+    const v = this.view;
+    const c = v.campeon;
+    if (!c) {
+      el.hidden = true;
+      this._campeonVisto = null;
+      return;
+    }
+    if (this._campeonVisto === c.id && !el.hidden) return;
+
+    const gane = c.id === v.you;
+    el.querySelector('.fp-titulo').textContent = gane ? '¡Has ganado la partida!' : `Gana ${c.nombre}`;
+    el.querySelector('.fp-sub').textContent =
+      `${c.puntos} puntos · objetivo ${(v.config && v.config.objetivo) || 500}`;
+    el.querySelector('.fp-tabla').innerHTML = [...v.jugadores]
+      .sort((a, b) => b.puntos - a.puntos || b.rondasGanadas - a.rondasGanadas)
+      .map((p, i) => `<li class="${p.soyYo ? 'yo' : ''}">
+        <span class="fp-puesto">${i + 1}</span>
+        <span>${p.avatar}</span>
+        <span class="fp-nombre">${escapeHtml(p.nombre)}${p.esBot ? ' 🤖' : ''}</span>
+        <span class="fp-puntos">${p.puntos}</span>
+      </li>`).join('');
+
+    if (!this._finEnlazado) {
+      this._finEnlazado = true;
+      el.querySelector('[data-otra]').onclick = () => {
+        el.hidden = true;
+        this.session.command('nuevaPartida', {});
+      };
+      el.querySelector('[data-cerrar-fin]').onclick = () => (el.hidden = true);
+    }
+    el.hidden = false;
+    this._campeonVisto = c.id;
+
+    if (gane) {
+      sfx.win();
+      if (this.settings.confetti) {
+        const r = this.el.confetti.getBoundingClientRect();
+        confettiBurst(r.width / 2, r.height * 0.35, 180, 1.5);
+        setTimeout(() => confettiBurst(r.width * 0.25, r.height * 0.4, 90, 1.2), 420);
+        setTimeout(() => confettiBurst(r.width * 0.75, r.height * 0.4, 90, 1.2), 780);
+      }
+    } else {
+      sfx.lose();
+    }
   }
 
   // -------------------------------------------------------------- animaciones
@@ -419,6 +474,9 @@ export class UnoUI {
         case 'rebaraja':
           this.aviso('Se rebaraja', 'El mazo se rehace con el descarte', 1400);
           sfx.deal();
+          break;
+        case 'finPartida':
+          this.aviso('Fin de la partida', `${ev.nombre} llega a ${ev.puntos} puntos`, 2600);
           break;
         case 'recover':
           this.aviso('Partida reanudada', 'Se había quedado parada', 1800);

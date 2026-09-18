@@ -451,6 +451,10 @@ export function runHostCommand(table, requesterId, cmd, payload = {}, hostId = n
       if (!isHost) return { ok: false };
       table.addBot(payload.style);
       return { ok: true };
+    case 'nuevaPartida':
+      if (!isHost) return { ok: false };
+      if (typeof table.nuevaPartida === 'function') table.nuevaPartida();
+      return { ok: true };
     case 'kick': {
       if (!isHost) return { ok: false };
       const p = table.game.seats[payload.seat];

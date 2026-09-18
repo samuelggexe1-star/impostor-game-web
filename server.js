@@ -69,6 +69,7 @@ const JUEGOS = {
     config: (c) => ({
       ...CONFIG_AB,
       segundosPorCarta: Math.min(60, Math.max(4, Number(c.segundosPorCarta) || 10)),
+      objetivo: Math.min(500, Math.max(5, Number(c.objetivo) || 30)),
       speed: 1
     })
   }
@@ -287,6 +288,7 @@ class Room {
     }
     if (!isOwner) return;
     if (cmd === 'addBot') t.addBot(payload.style);
+    else if (cmd === 'nuevaPartida' && typeof t.nuevaPartida === 'function') t.nuevaPartida();
     else if (cmd === 'pause') t.pause(!t.paused);
     else if (cmd === 'resume') t.resume();
     else if (cmd === 'start') t.start();

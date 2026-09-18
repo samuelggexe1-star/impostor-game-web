@@ -238,3 +238,49 @@ test('quien llega con la ronda empezada espera a la siguiente', () => {
   assert.equal(g.porId('tarde').esperando, false, 'en la ronda siguiente ya juega');
   assert.equal(g.porId('tarde').mano.length, 7, 'y recibe sus siete cartas');
 });
+
+test('la partida se acaba cuando alguien llega al objetivo de puntos', async () => {
+  const { UnoMesa } = await import('../js/uno-mesa.js');
+  const mesa = new UnoMesa({ speed: 40, turnSeconds: 999, objetivo: 30 });
+  mesa.join({ id: 'a', name: 'Ana' });
+  mesa.join({ id: 'b', name: 'Bea' });
+
+  // Ana llega al objetivo de golpe: es lo que pasaria tras ganar rondas.
+  const ana = mesa.game.porId('a');
+  ana.puntos = 42;
+  mesa.game.ganador = 'a';
+  mesa.game.ronda = 3;
+  mesa.registrarRonda();
+
+  assert.ok(mesa.campeon, 'deberia haber campeon');
+  assert.equal(mesa.campeon.id, 'a');
+  assert.equal(mesa.campeon.puntos, 42);
+  assert.equal(mesa.snapshotFor('b').campeon.nombre, 'Ana');
+
+  // Y no se empieza otra ronda sola con la partida acabada.
+  const rondaAntes = mesa.game.ronda;
+  mesa.maybeStart();
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(mesa.game.ronda, rondaAntes, 'no deberia arrancar otra ronda');
+
+  // Otra partida: puntos a cero y se puede volver a jugar.
+  mesa.nuevaPartida();
+  assert.equal(mesa.campeon, null);
+  assert.equal(mesa.game.porId('a').puntos, 0);
+  assert.equal(mesa.game.porId('b').puntos, 0);
+  mesa.destroy();
+});
+
+test('si dos pasan del objetivo gana el que mas puntos tiene', async () => {
+  const { UnoMesa } = await import('../js/uno-mesa.js');
+  const mesa = new UnoMesa({ speed: 40, turnSeconds: 999, objetivo: 20 });
+  mesa.join({ id: 'a', name: 'Ana' });
+  mesa.join({ id: 'b', name: 'Bea' });
+  mesa.game.porId('a').puntos = 25;
+  mesa.game.porId('b').puntos = 31;
+  mesa.game.ganador = 'a';
+  mesa.game.ronda = 2;
+  mesa.registrarRonda();
+  assert.equal(mesa.campeon.nombre, 'Bea');
+  mesa.destroy();
+});

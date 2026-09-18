@@ -156,3 +156,85 @@ test('la ronda no puede eternizarse aunque nadie falle', () => {
   assert.equal(g.estado, 'finRonda', `la ronda termina sola (${g.mano} cartas)`);
   assert.ok(g.mano <= 41, 'por el tope de cartas');
 });
+
+test('la probabilidad que enseña cuadra con las cartas que quedan', () => {
+  const g = new AltoBajoGame({ rng: mulberry32(7) });
+  g.sentar({ id: 'a', name: 'Ana' });
+  g.nuevaRonda();
+
+  for (let vuelta = 0; vuelta < 12; vuelta++) {
+    const pr = g.probabilidades();
+    assert.ok(pr, 'deberia haber probabilidades con mazo por medio');
+    assert.equal(pr.quedan, g.mazo.length);
+
+    // Contada a mano sobre el mazo de verdad
+    const r = g.carta.r;
+    const alto = g.mazo.filter((c) => c.r > r).length;
+    const bajo = g.mazo.filter((c) => c.r < r).length;
+    const empate = g.mazo.filter((c) => c.r === r).length;
+    assert.equal(alto + bajo + empate, g.mazo.length);
+    assert.ok(Math.abs(pr.alto - alto / g.mazo.length) < 1e-9);
+    assert.ok(Math.abs(pr.bajo - bajo / g.mazo.length) < 1e-9);
+    assert.ok(Math.abs(pr.alto + pr.bajo + pr.empate - 1) < 1e-9);
+
+    // Y sale en la instantanea que ve el jugador
+    const v = g.snapshot('a');
+    assert.ok(v.probabilidades);
+    assert.equal(v.probabilidades.quedan, g.mazo.length);
+
+    if (g.estado !== 'apuestas') break;
+    g.apostar('a', 'alto');
+    g.revelar();
+    if (g.estado === 'finRonda') break;
+  }
+});
+
+test('con un as en mesa nunca puede subir, y con un dos nunca bajar', () => {
+  const g = new AltoBajoGame({ rng: mulberry32(3) });
+  g.sentar({ id: 'a', name: 'Ana' });
+  g.nuevaRonda();
+
+  g.carta = { r: 14, s: 's' };              // as: lo mas alto que hay
+  g.mazo = g.mazo.filter((c) => !(c.r === 14 && c.s === 's'));
+  assert.equal(g.probabilidades().alto, 0);
+
+  g.carta = { r: 2, s: 'h' };               // dos: lo mas bajo
+  g.mazo = g.mazo.filter((c) => !(c.r === 2 && c.s === 'h'));
+  assert.equal(g.probabilidades().bajo, 0);
+});
+
+test('la partida se acaba al llegar al objetivo de puntos y se puede repetir', async () => {
+  const { AltoBajoMesa } = await import('../js/altobajo-mesa.js');
+  const mesa = new AltoBajoMesa({ speed: 60, segundosPorCarta: 1, objetivo: 10 });
+  mesa.join({ id: 'a', name: 'Ana' });
+  mesa.join({ id: 'b', name: 'Bea' });
+
+  mesa.game.porId('a').puntos = 12;
+  mesa.game.porId('b').puntos = 4;
+  mesa.game.estado = 'finRonda';
+  mesa.game.ronda = 2;
+  mesa.registrarRonda();
+
+  assert.ok(mesa.campeon, 'deberia haber campeon');
+  assert.equal(mesa.campeon.nombre, 'Ana');
+  assert.equal(mesa.snapshotFor('b').campeon.puntos, 12);
+  assert.equal(mesa.snapshotFor('b').config.objetivo, 10);
+
+  mesa.nuevaPartida();
+  assert.equal(mesa.campeon, null);
+  assert.deepEqual(mesa.game.jugadores.map((p) => p.puntos), [0, 0]);
+  mesa.destroy();
+});
+
+test('sin nadie en el objetivo la partida sigue', async () => {
+  const { AltoBajoMesa } = await import('../js/altobajo-mesa.js');
+  const mesa = new AltoBajoMesa({ speed: 60, segundosPorCarta: 1, objetivo: 30 });
+  mesa.join({ id: 'a', name: 'Ana' });
+  mesa.join({ id: 'b', name: 'Bea' });
+  mesa.game.porId('a').puntos = 29;
+  mesa.game.estado = 'finRonda';
+  mesa.game.ronda = 1;
+  mesa.registrarRonda();
+  assert.equal(mesa.campeon, undefined);
+  mesa.destroy();
+});

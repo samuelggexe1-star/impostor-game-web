@@ -39,6 +39,8 @@ export class AltoBajoUI {
       reloj: $('abRelojBarra'),
       alto: $('abAlto'),
       bajo: $('abBajo'),
+      probAlto: $('abProbAlto'),
+      probBajo: $('abProbBajo'),
       estado: $('abEstado'),
       aviso: $('abAviso'),
       ronda: $('abRonda'),
@@ -46,6 +48,7 @@ export class AltoBajoUI {
       roomCode: $('abRoomCode'),
       confetti: $('abConfetti'),
       fx: $('abFx'),
+      fin: $('abFinPartida'),
       fogonazo: $('abFogonazo'),
       chatLog: $('chatLog'),
       historyList: $('historyList'),
@@ -57,6 +60,8 @@ export class AltoBajoUI {
       if (el) el.innerHTML = '';
     }
     this._firma = null;
+    this._campeonVisto = null;
+    if (this.el.fin) this.el.fin.hidden = true;
     this.el.alto.onclick = () => this.apostar('alto');
     this.el.bajo.onclick = () => this.apostar('bajo');
     this.session.on('state', (v, e) => this.onState(v, e));
@@ -134,6 +139,24 @@ export class AltoBajoUI {
     this.el.alto.classList.toggle('elegida', v.tuApuesta === 'alto');
     this.el.bajo.classList.toggle('elegida', v.tuApuesta === 'bajo');
 
+    // Probabilidad real con las cartas que quedan: se puede contar mirando
+    // el historial, así que mejor enseñarla y que la decisión sea de verdad.
+    const pr = v.probabilidades;
+    if (pr) {
+      const pct = (x) => Math.round(x * 100) + '%';
+      this.el.probAlto.textContent = pct(pr.alto);
+      this.el.probBajo.textContent = pct(pr.bajo);
+      this.el.alto.classList.toggle('favorita', pr.alto > pr.bajo);
+      this.el.bajo.classList.toggle('favorita', pr.bajo > pr.alto);
+      this.el.probAlto.title = this.el.probBajo.title =
+        `Quedan ${pr.quedan} cartas · empate ${pct(pr.empate)}`;
+    } else {
+      this.el.probAlto.textContent = '';
+      this.el.probBajo.textContent = '';
+      this.el.alto.classList.remove('favorita');
+      this.el.bajo.classList.remove('favorita');
+    }
+
     if (!yo) this.el.estado.textContent = 'Estás mirando la partida';
     else if (!yo.vivo) this.el.estado.innerHTML = 'Sin vidas. Esperando a la siguiente ronda…';
     else if (v.estado === 'finRonda') this.el.estado.textContent = 'Ronda terminada';
@@ -141,7 +164,57 @@ export class AltoBajoUI {
     else if (v.estado === 'apuestas') this.el.estado.innerHTML = '¿La siguiente será más alta o más baja?';
     else this.el.estado.textContent = 'Preparando…';
 
+    this.renderFinPartida();
     this.renderPanel();
+  }
+
+  renderFinPartida() {
+    const el = this.el.fin;
+    if (!el) return;
+    const v = this.view;
+    const c = v.campeon;
+    if (!c) {
+      el.hidden = true;
+      this._campeonVisto = null;
+      return;
+    }
+    if (this._campeonVisto === c.id && !el.hidden) return;
+
+    const gane = c.id === v.you;
+    el.querySelector('.fp-titulo').textContent = gane ? '¡Has ganado la partida!' : `Gana ${c.nombre}`;
+    el.querySelector('.fp-sub').textContent =
+      `${c.puntos} puntos · objetivo ${(v.config && v.config.objetivo) || 30}`;
+    el.querySelector('.fp-tabla').innerHTML = [...v.jugadores]
+      .sort((a, b) => b.puntos - a.puntos || b.mejorRacha - a.mejorRacha)
+      .map((p, i) => `<li class="${p.soyYo ? 'yo' : ''}">
+        <span class="fp-puesto">${i + 1}</span>
+        <span>${p.avatar}</span>
+        <span class="fp-nombre">${escapeHtml(p.nombre)}${p.esBot ? ' 🤖' : ''}</span>
+        <span class="fp-puntos">${p.puntos}</span>
+      </li>`).join('');
+
+    if (!this._finEnlazado) {
+      this._finEnlazado = true;
+      el.querySelector('[data-otra]').onclick = () => {
+        el.hidden = true;
+        this.session.command('nuevaPartida', {});
+      };
+      el.querySelector('[data-cerrar-fin]').onclick = () => (el.hidden = true);
+    }
+    el.hidden = false;
+    this._campeonVisto = c.id;
+
+    if (gane) {
+      sfx.win();
+      if (this.settings.confetti) {
+        const r = this.el.confetti.getBoundingClientRect();
+        confettiBurst(r.width / 2, r.height * 0.35, 180, 1.5);
+        setTimeout(() => confettiBurst(r.width * 0.25, r.height * 0.4, 90, 1.2), 420);
+        setTimeout(() => confettiBurst(r.width * 0.75, r.height * 0.4, 90, 1.2), 780);
+      }
+    } else {
+      sfx.lose();
+    }
   }
 
   renderPanel() {
@@ -220,6 +293,9 @@ export class AltoBajoUI {
           break;
         }
         case 'chat': sfx.chat(); this.bumpBadge(); break;
+        case 'finPartida':
+          this.aviso('Fin de la partida', `${ev.nombre} llega a ${ev.puntos} puntos`, 'bien', 2600);
+          break;
         case 'recover': this.aviso('Partida reanudada', '', 'bien', 1500); break;
         default: break;
       }

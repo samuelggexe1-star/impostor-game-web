@@ -862,10 +862,14 @@ function bindJuegosNuevos() {
     botonCrear: 'abBtnCreate', botonUnirse: 'abBtnJoin', botonSolo: 'abBtnSolo',
     botsCrear: 'abCfgBots', botsSolo: 'abSoloBots',
     rangos: [['abCfgBots', 'abBotLabel'], ['abSoloBots', 'abSoloLabel']],
-    config: () => ({ segundosPorCarta: Number($('abCfgTiempo').value) }),
+    config: () => ({
+      segundosPorCarta: Number($('abCfgTiempo').value),
+      objetivo: Number($('abCfgObjetivo').value) || 30
+    }),
     crearLocal: () => new AltoBajoMesa({
       speed: [1, 0.7, 1, 1.7][state.settings.speed] || 1,
-      segundosPorCarta: Number($('abCfgTiempo').value) || 10
+      segundosPorCarta: Number($('abCfgTiempo').value) || 10,
+      objetivo: Number($('abCfgObjetivo').value) || 30
     })
   });
 }

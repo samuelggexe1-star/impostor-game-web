@@ -44,6 +44,8 @@ export class BlackjackUI {
       fichas: $('bjFichas'),
       monto: $('bjMonto'),
       confirmar: $('bjConfirmar'),
+      quitar: $('bjQuitar'),
+      recargar: $('bjRecargar'),
       acciones: $('bjAcciones'),
       pedir: $('bjPedir'),
       plantarse: $('bjPlantarse'),
@@ -100,6 +102,17 @@ export class BlackjackUI {
       this.apuesta = 0;
       this.el.monto.textContent = '0';
       sfx.bet();
+    };
+    // Deshacer lo que llevas puesto sin tener que confirmarlo.
+    this.el.quitar.onclick = () => {
+      this.apuesta = 0;
+      this.el.monto.textContent = '0';
+      sfx.check();
+    };
+    // Sin fichas no se puede jugar: antes te quedabas mirando la mesa.
+    this.el.recargar.onclick = () => {
+      this.session.command('rebuy', { amount: 1000 });
+      sfx.chip(3);
     };
     this.el.pedir.onclick = () => { this.session.act('pedir', {}); sfx.deal(); };
     this.el.plantarse.onclick = () => { this.session.act('plantarse', {}); sfx.check(); };
@@ -194,7 +207,10 @@ export class BlackjackUI {
     const yo = this.yo();
     const enApuestas = v.estado === 'apuestas';
     const o = v.opciones || {};
-    this.el.apuestas.hidden = !enApuestas || !yo || (yo && yo.apuesta > 0);
+    const sinFichas = !!yo && yo.fichas <= 0;
+    this.el.apuestas.hidden = !enApuestas || !yo || sinFichas || (yo && yo.apuesta > 0);
+    this.el.recargar.hidden = !sinFichas;
+    this.el.quitar.hidden = this.apuesta <= 0;
     this.el.acciones.hidden = !o.tuTurno;
     if (o.tuTurno) {
       this.el.pedir.disabled = !o.puedePedir;
@@ -202,7 +218,9 @@ export class BlackjackUI {
       this.el.dividir.hidden = !o.puedeDividir;
     }
 
-    if (enApuestas) {
+    if (sinFichas) {
+      this.el.estado.innerHTML = 'Sin fichas. Recarga para seguir jugando.';
+    } else if (enApuestas) {
       this.el.estado.innerHTML = yo && yo.apuesta > 0
         ? `Has apostado <b>${yo.apuesta}</b>. Esperando a los demás…`
         : `Haz tu apuesta (mínimo ${v.apuestaMin})`;

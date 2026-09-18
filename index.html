@@ -401,6 +401,19 @@
     <div class="uno-estado" id="unoEstado">Esperando…</div>
   </footer>
 
+  <div class="fin-partida" id="unoFinPartida" hidden>
+    <div class="fp-caja">
+      <div class="fp-corona" aria-hidden="true">👑</div>
+      <h2 class="fp-titulo">—</h2>
+      <p class="fp-sub">—</p>
+      <ol class="fp-tabla"></ol>
+      <div class="fp-botones">
+        <button class="btn primary big" data-otra>Otra partida</button>
+        <button class="btn ghost" data-cerrar-fin>Ver la mesa</button>
+      </div>
+    </div>
+  </div>
+
   <div class="uno-colores" id="unoSelector" hidden>
     <div class="selector-caja">
       <h3>Elige color</h3>
@@ -483,8 +496,10 @@
     <div class="bj-apuestas" id="bjApuestas" hidden>
       <span class="bj-label">Tu apuesta</span>
       <div class="bj-fichas" id="bjFichas"></div>
+      <button class="btn small ghost" id="bjQuitar" title="Quitar la apuesta">↺</button>
       <button class="btn primary" id="bjConfirmar">Apostar <b id="bjMonto">0</b></button>
     </div>
+    <button class="btn primary big" id="bjRecargar" hidden>Te has quedado sin fichas · recargar 1.000</button>
     <div class="bj-acciones" id="bjAcciones" hidden>
       <button class="btn action" id="bjPedir"><b>Pedir</b></button>
       <button class="btn action" id="bjPlantarse"><b>Plantarse</b></button>
@@ -518,6 +533,8 @@
         <div class="tab-panel active" data-gpanel="ab-create">
           <label class="field"><span>Segundos por carta</span>
             <select id="abCfgTiempo"><option value="6">6 · rápido</option><option value="10" selected>10 · normal</option><option value="20">20 · tranquilo</option></select></label>
+          <label class="field"><span>Puntos para ganar</span>
+            <select id="abCfgObjetivo"><option value="15">15 · corta</option><option value="30" selected>30 · normal</option><option value="60">60 · larga</option></select></label>
           <label class="field"><span>Rellenar con bots <em id="abBotLabel">2</em></span>
             <input id="abCfgBots" type="range" min="0" max="6" value="2"></label>
           <button id="abBtnCreate" class="btn primary big">Crear partida</button>
@@ -558,13 +575,25 @@
       <div class="ab-reloj"><i id="abRelojBarra"></i></div>
     </div>
     <div class="ab-aviso" id="abAviso" hidden></div>
+    <div class="fin-partida" id="abFinPartida" hidden>
+      <div class="fp-caja">
+        <div class="fp-corona" aria-hidden="true">👑</div>
+        <h2 class="fp-titulo">—</h2>
+        <p class="fp-sub">—</p>
+        <ol class="fp-tabla"></ol>
+        <div class="fp-botones">
+          <button class="btn primary big" data-otra>Otra partida</button>
+          <button class="btn ghost" data-cerrar-fin>Ver la mesa</button>
+        </div>
+      </div>
+    </div>
     <div id="abFx" class="fx-layer" aria-hidden="true"></div>
     <div id="abFogonazo" class="ab-fogonazo" aria-hidden="true"></div>
     <canvas id="abConfetti" class="confetti"></canvas>
   </main>
   <footer class="ab-pie">
-    <button class="btn ab-boton alto" id="abAlto"><span>▲</span> Más alta</button>
-    <button class="btn ab-boton bajo" id="abBajo"><span>▼</span> Más baja</button>
+    <button class="btn ab-boton alto" id="abAlto"><span>▲</span> Más alta<em class="ab-prob" id="abProbAlto"></em></button>
+    <button class="btn ab-boton bajo" id="abBajo"><span>▼</span> Más baja<em class="ab-prob" id="abProbBajo"></em></button>
     <div class="ab-estado" id="abEstado">Esperando…</div>
   </footer>
 </section>
