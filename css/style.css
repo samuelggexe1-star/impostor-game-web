@@ -202,6 +202,24 @@ input:focus, select:focus {
 }
 select { appearance: none; cursor: pointer; }
 
+/* ------------------------- foco visible con teclado ---------------------- */
+/* Sin esto, navegando con un teclado bluetooth (cosa normal con un iPad) no
+   se ve dónde estás. :focus-visible solo se dispara con teclado, así que al
+   tocar con el dedo o con el ratón no aparece nada. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.ucard:focus-visible,
+.game-card:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+/* En las cartas, que el contorno no quede cortado por el overflow del padre. */
+.ucard:focus-visible, .card:focus-visible { outline-offset: 1px; }
+
 input[type="range"] {
   width: 100%;
   appearance: none;
