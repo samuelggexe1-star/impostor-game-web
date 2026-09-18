@@ -1607,7 +1607,16 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 }
 .uno-grito:disabled { filter: grayscale(.7); opacity: .45; }
 
+/* La fila lleva el boton de ordenar a un lado y la mano, que se desliza. */
+.uno-mano-fila { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.uno-orden {
+  flex: 0 0 auto; align-self: center;
+  font-size: .78rem; padding: 8px 12px; white-space: nowrap;
+}
+.uno-orden.activo { border-color: var(--gold); color: var(--gold); }
+
 .uno-mano {
+  flex: 1 1 auto;
   display: flex;
   gap: 6px;
   max-width: 100%;

@@ -129,3 +129,36 @@ test('una mesa con un solo jugador espera, no se considera atascada', async () =
   assert.equal(t.game.eligibleForHand().length, 1);
   t.destroy();
 });
+
+test('el torneo declara campeon cuando solo queda uno con fichas', async () => {
+  const t = new Table({ mode: 'torneo', startingChips: 1000, speed: 40, turnSeconds: 999, allowRebuy: false });
+  t.join({ id: 'a', name: 'Ana', chips: 1000 });
+  t.join({ id: 'b', name: 'Bea', chips: 1000 });
+  t.join({ id: 'c', name: 'Cris', chips: 1000 });
+
+  // Dos se quedan a cero: queda Ana sola con fichas.
+  t.game.seats.find((p) => p && p.id === 'b').chips = 0;
+  t.game.seats.find((p) => p && p.id === 'c').chips = 0;
+  t.game.seats.find((p) => p && p.id === 'a').chips = 3000;
+  t.checkBustouts();
+
+  assert.ok(t.campeon, 'deberia haber campeon');
+  assert.equal(t.campeon.nombre, 'Ana');
+  assert.equal(t.campeon.fichas, 3000);
+  assert.equal(t.snapshotFor('b').campeon.nombre, 'Ana');
+
+  t.nuevaPartida();
+  assert.equal(t.campeon, null);
+  for (const p of t.game.seated()) assert.equal(p.chips, 1000);
+  t.destroy();
+});
+
+test('en cash no hay campeon: la gente recarga y sigue', () => {
+  const t = new Table({ mode: 'cash', startingChips: 1000, speed: 40, turnSeconds: 999, allowRebuy: true });
+  t.join({ id: 'a', name: 'Ana', chips: 1000 });
+  t.join({ id: 'b', name: 'Bea', chips: 1000 });
+  t.game.seats.find((p) => p && p.id === 'b').chips = 0;
+  t.checkBustouts();
+  assert.equal(t.campeon, undefined, 'en cash no se corona a nadie');
+  t.destroy();
+});

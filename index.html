@@ -215,6 +215,18 @@
       </div>
 
       <div id="banner" class="banner" hidden></div>
+      <div class="fin-partida" id="finTorneo" hidden>
+        <div class="fp-caja">
+          <div class="fp-corona" aria-hidden="true">🏆</div>
+          <h2 class="fp-titulo">—</h2>
+          <p class="fp-sub">—</p>
+          <ol class="fp-tabla"></ol>
+          <div class="fp-botones">
+            <button class="btn primary big" data-otra>Otro torneo</button>
+            <button class="btn ghost" data-cerrar-fin>Ver la mesa</button>
+          </div>
+        </div>
+      </div>
       <div id="flash" class="table-flash" aria-hidden="true"></div>
       <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
       <canvas id="confetti" class="confetti"></canvas>
@@ -397,7 +409,10 @@
       <button class="btn action" id="unoPasar" hidden><b>Pasar</b></button>
       <button class="btn uno-grito" id="unoGrito">¡UNO!</button>
     </div>
-    <div class="uno-mano" id="unoMano"></div>
+    <div class="uno-mano-fila">
+      <button class="btn small ghost uno-orden" id="unoOrden" title="Ordenar la mano">↕ Ordenar</button>
+      <div class="uno-mano" id="unoMano"></div>
+    </div>
     <div class="uno-estado" id="unoEstado">Esperando…</div>
   </footer>
 

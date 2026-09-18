@@ -6,6 +6,10 @@ import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce
 
 const SIMBOLO = { mas2: '+2', salta: '🚫', sentido: '🔄', mas4: '+4', comodin: '★' };
 const COLOR_HEX = { rojo: '#e8443a', amarillo: '#f2c231', verde: '#2fae5a', azul: '#2f7fe0' };
+const ORDEN_COLOR = { rojo: 0, amarillo: 1, verde: 2, azul: 3 };
+/** Los números primero, luego las especiales y al final los comodines. */
+const ORDEN_VALOR = { mas2: 10, salta: 11, sentido: 12, comodin: 20, mas4: 21 };
+const pesoValor = (v) => (ORDEN_VALOR[v] != null ? ORDEN_VALOR[v] : Number(v));
 const NOMBRE_COLOR = { rojo: 'rojo', amarillo: 'amarillo', verde: 'verde', azul: 'azul' };
 
 /** Crea el elemento visual de una carta de UNO. */
@@ -64,6 +68,7 @@ export class UnoUI {
       chatBadge: $('unoChatBadge'),
       fx: $('unoFx'),
       fin: $('unoFinPartida'),
+      orden: $('unoOrden'),
       confetti: $('unoConfetti'),
       chatLog: $('chatLog'),
       historyList: $('historyList'),
@@ -89,6 +94,7 @@ export class UnoUI {
   }
 
   bind() {
+    this.el.orden.onclick = () => this.alternarOrden();
     this.el.mazo.onclick = () => {
       if (!this.esMiTurno()) return;
       this.session.act('robar', {});
@@ -109,6 +115,27 @@ export class UnoUI {
         this.el.selector.hidden = true;
         sfx.flip();
       };
+    });
+  }
+
+  /** Ordena la mano por color y valor. Con 15 cartas en un iPad se agradece. */
+  alternarOrden() {
+    this.ordenada = !this.ordenada;
+    this.el.orden.classList.toggle('activo', this.ordenada);
+    this.el.orden.title = this.ordenada ? 'Volver al orden de siempre' : 'Ordenar la mano';
+    this.manoRender = null;        // fuerza repintado
+    sfx.chip(1);
+    this.renderMano();
+  }
+
+  /** La mano tal y como hay que pintarla: como vino o puesta en orden. */
+  manoOrdenada() {
+    const mano = (this.view && this.view.tuMano) || [];
+    if (!this.ordenada) return mano;
+    return [...mano].sort((a, b) => {
+      const ca = a.color ? ORDEN_COLOR[a.color] : 9;   // comodines al final
+      const cb = b.color ? ORDEN_COLOR[b.color] : 9;
+      return ca - cb || pesoValor(a.valor) - pesoValor(b.valor);
     });
   }
 
@@ -226,9 +253,9 @@ export class UnoUI {
 
   renderMano() {
     const v = this.view;
-    const mano = v.tuMano || [];
+    const mano = this.manoOrdenada();
     const jugables = new Set(v.jugables || []);
-    const firma = mano.map((c) => c.id).join(',') + '|' + [...jugables].join(',') + '|' + this.esMiTurno();
+    const firma = mano.map((c) => c.id).join(',') + '|' + [...jugables].join(',') + '|' + this.esMiTurno() + '|' + this.ordenada;
     if (firma === this.manoRender) return;
     const nuevas = new Set(mano.map((c) => c.id));
     const antes = new Set(this._cartasAntes || []);

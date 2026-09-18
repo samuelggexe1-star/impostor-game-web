@@ -363,6 +363,7 @@ export class Table extends Emitter {
 
   maybeStart() {
     if (!this.running || this.paused) return;
+    if (this.campeon) return;             // torneo acabado: espera a otro
     if (this.game.inHand()) return;
     if (this.game.eligibleForHand().length < 2) {
       this.publish();
@@ -582,6 +583,40 @@ export class Table extends Emitter {
         this.system(`${p.name} recarga y sigue jugando`);
       }
     }
+    this.checkTournamentOver();
+  }
+
+  /**
+   * En torneo no se recarga: cuando solo queda uno con fichas, ha ganado.
+   * Antes la mesa se quedaba callada para siempre en ese punto.
+   */
+  checkTournamentOver() {
+    if (this.config.mode !== 'torneo' || this.campeon) return;
+    const sentados = this.game.seated();
+    if (sentados.length < 2) return;
+    const conFichas = sentados.filter((p) => p.chips > 0);
+    if (conFichas.length !== 1) return;
+    const c = conFichas[0];
+    this.campeon = { id: c.id, nombre: c.name, avatar: c.avatar || '🙂', fichas: c.chips, seat: c.seat };
+    this.pushEvent({ t: 'finTorneo', seat: c.seat, name: c.name, chips: c.chips });
+    this.system(`${c.name} gana el torneo con ${c.chips.toLocaleString('es-ES')} fichas`);
+  }
+
+  /** Empezar otro torneo con las mismas sillas. */
+  nuevaPartida() {
+    this.campeon = null;
+    this.history = [];
+    this.level = 0;
+    this.levelStartedAt = Date.now();
+    for (const p of this.game.seated()) {
+      p.chips = this.config.startingChips;
+      p.status = 'waiting';
+      p.stats = p.stats || {};
+    }
+    this.system('Empieza un torneo nuevo');
+    this.maybeStart();
+    this.publish();
+    return { ok: true };
   }
 
   // -------------------------------------------------------------- snapshot
@@ -610,6 +645,7 @@ export class Table extends Emitter {
             endsAt: this.levelStartedAt + (this.level + 1) * this.config.levelMinutes * 60000
           }
         : null,
+      campeon: this.campeon || null,
       messages: this.messages.slice(-40),
       history: this.history.slice(0, 12)
     };

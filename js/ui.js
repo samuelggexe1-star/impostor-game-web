@@ -70,6 +70,7 @@ export class TableUI {
       flash: $('flash'),
       confetti: $('confetti'),
       banner: $('banner'),
+      finTorneo: $('finTorneo'),
       roomCode: $('roomCode'),
       handNumber: $('handNumber'),
       blindsLabel: $('blindsLabel'),
@@ -106,6 +107,8 @@ export class TableUI {
     };
 
     initConfetti(this.el.confetti);
+    if (this.el.finTorneo) this.el.finTorneo.hidden = true;
+    this._campeonVisto = null;
     // Al volver a entrar a una partida hay que partir de cero: si no, los
     // asientos y cartas de la anterior se quedan colgando en el DOM.
     this.el.seats.innerHTML = '';
@@ -453,9 +456,61 @@ export class TableUI {
     // --- panel de acciones
     this.renderActions(view);
     this.renderHud(view);
+    this.renderFinTorneo(view);
     this.renderChat(view);
     this.renderHistory(view);
     this.renderStats(view);
+  }
+
+  /** Cartel de campeon cuando el torneo se queda con un solo superviviente. */
+  renderFinTorneo(view) {
+    const el = this.el.finTorneo;
+    if (!el) return;
+    const c = view.campeon;
+    if (!c) {
+      el.hidden = true;
+      this._campeonVisto = null;
+      return;
+    }
+    if (this._campeonVisto === c.id && !el.hidden) return;
+
+    const yo = view.players.find((p) => p && p.isYou);
+    const gane = !!yo && yo.seat === c.seat;
+    el.querySelector('.fp-titulo').textContent = gane ? '¡Has ganado el torneo!' : `Gana ${c.nombre}`;
+    el.querySelector('.fp-sub').textContent = `${c.fichas.toLocaleString('es-ES')} fichas`;
+    el.querySelector('.fp-tabla').innerHTML = view.players
+      .filter(Boolean)
+      .sort((a, b) => b.chips - a.chips)
+      .map((p, i) => `<li class="${p.isYou ? 'yo' : ''}">
+        <span class="fp-puesto">${i + 1}</span>
+        <span>${p.avatar || '🙂'}</span>
+        <span class="fp-nombre">${escapeHtml(p.name)}${p.isBot ? ' 🤖' : ''}</span>
+        <span class="fp-puntos">${p.chips.toLocaleString('es-ES')}</span>
+      </li>`).join('');
+
+    if (!this._finEnlazado) {
+      this._finEnlazado = true;
+      el.querySelector('[data-otra]').onclick = () => {
+        el.hidden = true;
+        this.session.command('nuevaPartida', {});
+      };
+      el.querySelector('[data-cerrar-fin]').onclick = () => (el.hidden = true);
+    }
+    el.hidden = false;
+    this._campeonVisto = c.id;
+
+    if (gane) {
+      sfx.win();
+      if (this.settings.confetti) {
+        const r = this.el.confetti.getBoundingClientRect();
+        confettiBurst(r.width / 2, r.height * 0.35, 200, 1.6);
+        setTimeout(() => confettiBurst(r.width * 0.25, r.height * 0.42, 100, 1.2), 420);
+        setTimeout(() => confettiBurst(r.width * 0.75, r.height * 0.42, 100, 1.2), 780);
+      }
+      coinRain(50);
+    } else {
+      sfx.lose();
+    }
   }
 
   youSeat(view) {
@@ -957,6 +1012,9 @@ export class TableUI {
           break;
         case 'recover':
           this.toast('La mesa se había quedado parada y ha seguido sola');
+          break;
+        case 'finTorneo':
+          this.banner('Fin del torneo', `${ev.name} se lleva todas las fichas`, 3000);
           break;
         case 'busted':
           if (this.me() && ev.seat === this.me().seat) this.banner('Sin fichas', 'Pide una recarga para seguir', 3000);
