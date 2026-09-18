@@ -285,11 +285,77 @@ export class BlackjackUI {
           this.fichasDePago(ev.resultados);
           this.mostrarPagos(ev.resultados);
           break;
-        case 'chat': sfx.chat(); this.bumpBadge(); break;
+        case 'chat': this.burbuja(ev.msg); sfx.chat(); this.bumpBadge(); break;
         case 'recover': this.aviso('Mesa reanudada', '', 1500); break;
         default: break;
       }
     }
+  }
+
+  /** El bocadillo va encima de la placa del jugador. */
+  anclaDe(msg) {
+    const quien = this.view.jugadores.find((p) => p.nombre === msg.from);
+    if (!quien) return null;
+    return this.el.jugadores.querySelector(`[data-id="${CSS.escape(quien.id)}"]`);
+  }
+
+  /**
+   * Bocadillo encima de quien habla. Sin esto los comentarios se quedan
+   * escondidos en el panel lateral y no se entera nadie.
+   */
+  burbuja(msg) {
+    if (!msg || msg.system || !this.el.fx || motion.reduced) return;
+    const ancla = this.anclaDe(msg);
+    const capa = this.el.fx;
+    this._burbujas = this._burbujas || new Map();
+    const clave = msg.from || '?';
+    const vieja = this._burbujas.get(clave);
+    if (vieja) {
+      clearTimeout(vieja.timer);
+      vieja.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'speech';
+    el.innerHTML = `<span class="who">${escapeHtml(msg.from)}</span>${escapeHtml(msg.text)}`;
+    if (ancla) {
+      const r = rectIn(ancla, capa);
+      el.style.left = r.cx + 'px';
+      // Arriba si cabe; si el jugador está pegado al borde, por debajo.
+      if (r.y < 70) {
+        el.classList.add('abajo');
+        el.style.top = (r.y + r.h + 8) + 'px';
+      } else {
+        el.style.top = (r.y - 8) + 'px';
+      }
+    } else {
+      el.style.left = '50%';
+      el.style.top = '14%';
+    }
+    capa.appendChild(el);
+    const base = el.classList.contains('abajo') ? 'translate(-50%,0)' : 'translate(-50%,-100%)';
+    animateOnce(el, [
+      { transform: `${base} scale(.7)`, opacity: 0 },
+      { transform: `${base} scale(1.06)`, opacity: 1, offset: .55 },
+      { transform: `${base} scale(1)`, opacity: 1 }
+    ], { duration: ms(320), easing: 'cubic-bezier(.2,1.3,.4,1)' });
+
+    const timer = setTimeout(() => {
+      el.classList.add('fade');
+      setTimeout(() => el.remove(), 450);
+      this._burbujas.delete(clave);
+    }, ms(4200));
+    this._burbujas.set(clave, { el, timer });
+  }
+
+  /** Limpia los bocadillos pendientes al salir. */
+  limpiarBurbujas() {
+    if (!this._burbujas) return;
+    for (const { el, timer } of this._burbujas.values()) {
+      clearTimeout(timer);
+      el.remove();
+    }
+    this._burbujas.clear();
   }
 
   // ------------------------------------------------------ piezas de animación
@@ -438,6 +504,7 @@ export class BlackjackUI {
 
   destroy() {
     pararParpadeo();
+    this.limpiarBurbujas();
     clearTimeout(this._t);
     if (this.el.fx) this.el.fx.innerHTML = '';
   }

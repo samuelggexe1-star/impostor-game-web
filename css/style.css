@@ -539,6 +539,19 @@ input[type="range"]::-moz-range-thumb {
   border-top-color: #e9eef7;
   border-bottom: 0;
 }
+/* Si el jugador está pegado al borde de arriba, el bocadillo se da la
+   vuelta y sale por debajo: si no, se queda fuera de la pantalla. */
+.speech.abajo {
+  transform: translate(-50%, 0);
+  border-radius: 4px 14px 14px 14px;
+}
+.speech.abajo::after {
+  bottom: auto; top: -6px;
+  border-top: 0; border-top-color: transparent;
+  border-bottom: 7px solid #fefefe;
+}
+.speech.abajo.fade { transform: translate(-50%, 20%); }
+
 .speech .who { display: block; font-size: .68rem; font-weight: 800; color: #5a6b8c; margin-bottom: 1px; }
 .speech.fade { opacity: 0; transition: opacity .4s ease, transform .4s ease; transform: translate(-50%, -120%); }
 @keyframes speechIn {
