@@ -1509,7 +1509,7 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   position: absolute;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  width: clamp(190px, 30vw, 300px);
+  width: min(clamp(190px, 30vw, 300px), 46vh);
   aspect-ratio: 1;
   border-radius: 50%;
   background: radial-gradient(circle, var(--color-actual, transparent) 0%, transparent 62%);
@@ -1610,7 +1610,10 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .uno-mano {
   display: flex;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   padding: 14px 6px 8px;
   scrollbar-width: none;
   justify-content: safe center;
@@ -1837,7 +1840,9 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
 .ab-historial { display: flex; gap: 4px; align-items: center; min-height: 34px; }
 .ab-historial .mini-card { width: 26px; height: 36px; font-size: .72rem; opacity: .65; }
 .ab-carta { position: relative; perspective: 900px; }
-.ab-carta .card { --cw: clamp(96px, 16vw, 150px); }
+/* El ancho manda, pero nunca mas alto de lo que cabe: en apaisado de
+   movil la pantalla mide 390 px y la carta se salia por abajo. */
+.ab-carta .card { --cw: min(clamp(96px, 16vw, 150px), 26vh); }
 .ab-carta .card.saliendo { animation: abFlip .55s cubic-bezier(.2,.9,.25,1); }
 @keyframes abFlip {
   from { transform: rotateY(90deg) scale(.8); opacity: .4; }
@@ -1906,4 +1911,35 @@ body.four-color .card.suit-c .card-front { color: #16a34a; }
   .bj-acciones .btn.action { min-width: 150px; padding: 16px; font-size: 1.05rem; }
   .bj-ficha { width: 58px; height: 58px; font-size: .95rem; }
   .ab-boton { padding: 26px; font-size: 1.3rem; }
+}
+
+/* ------- cartel de "volviendo a la partida" al recargar o desbloquear ----- */
+.reconectando {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  background: rgba(6, 10, 20, .82);
+  backdrop-filter: blur(8px);
+}
+.reconectando .rc-caja {
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 28px 38px;
+  border-radius: 20px;
+  background: rgba(16, 22, 38, .9);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+.reconectando p { margin: 0; color: var(--muted); font-size: .98rem; }
+.reconectando b { color: var(--gold); letter-spacing: .22em; font-size: 1.1rem; }
+.reconectando .rc-baraja { display: flex; gap: 6px; }
+.reconectando .rc-baraja i {
+  width: 26px; height: 37px; border-radius: 5px;
+  background: linear-gradient(150deg, #2b3550, #161d2e);
+  border: 1px solid rgba(246,196,83,.35);
+  animation: rcSalta 1s ease-in-out infinite;
+}
+.reconectando .rc-baraja i:nth-child(2) { animation-delay: .14s; }
+.reconectando .rc-baraja i:nth-child(3) { animation-delay: .28s; }
+@keyframes rcSalta {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(-6deg); }
 }

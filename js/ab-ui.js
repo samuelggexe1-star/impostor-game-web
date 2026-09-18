@@ -2,7 +2,7 @@
 
 import { RANK_LABEL, SUIT_GLYPH } from './cards.js';
 import { sfx } from './sound.js';
-import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce } from './fx.js';
+import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce, avisarTurno, pararParpadeo } from './fx.js';
 
 function crearCarta(c) {
   const el = document.createElement('div');
@@ -81,6 +81,12 @@ export class AltoBajoUI {
     this.render();
     this.animar(eventos || []);
     this._volteoPendiente = false;
+    // Aquí se apuesta a la vez, así que el aviso es al abrirse la apuesta.
+    const yo = view.jugadores.find((p) => p.soyYo);
+    const meToca = view.estado === 'apuestas' && !!yo && yo.vivo && !view.tuApuesta;
+    if (meToca && !this._tocaba) { sfx.turn(); avisarTurno('🔔 ¡Alto o bajo!'); }
+    if (!meToca) pararParpadeo();
+    this._tocaba = meToca;
   }
 
   render() {
@@ -406,6 +412,7 @@ export class AltoBajoUI {
   }
 
   destroy() {
+    pararParpadeo();
     cancelAnimationFrame(this._raf);
     if (this.el.fx) this.el.fx.innerHTML = '';
     clearTimeout(this._t);

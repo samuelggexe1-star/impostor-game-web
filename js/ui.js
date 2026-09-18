@@ -7,7 +7,7 @@ import { equity } from './odds.js';
 import { sfx } from './sound.js';
 import {
   motion, ms, wait, rectIn, flyTo, floatText, makeChipEl, chipBreakdown, chipColor,
-  initConfetti, confettiBurst, coinRain, tweenNumber, animateOnce
+  initConfetti, confettiBurst, coinRain, tweenNumber, animateOnce, avisarTurno, pararParpadeo
 } from './fx.js';
 
 // Los asientos se reparten sobre una elipse. El jugador local siempre abajo
@@ -766,30 +766,11 @@ export class TableUI {
   /** Aviso cuando te toca: sonido, vibracion y parpadeo del titulo si no miras. */
   notifyTurn() {
     sfx.turn();
-    if (navigator.vibrate) {
-      try { navigator.vibrate([35, 60, 35]); } catch (_) {}
-    }
-    if (document.hidden) this.startTitleFlash();
-  }
-
-  startTitleFlash() {
-    if (this._titleTimer) return;
-    this._title = this._title || document.title;
-    let on = false;
-    this._titleTimer = setInterval(() => {
-      document.title = on ? this._title : '🔔 ¡Te toca!';
-      on = !on;
-    }, 900);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.stopTitleFlash();
-    }, { once: true });
+    avisarTurno('🔔 ¡Te toca!');
   }
 
   stopTitleFlash() {
-    if (!this._titleTimer) return;
-    clearInterval(this._titleTimer);
-    this._titleTimer = null;
-    if (this._title) document.title = this._title;
+    pararParpadeo();
   }
 
   updateRaiseLabel() {

@@ -87,7 +87,7 @@ test('dice quien es y sirve la web', async () => {
   assert.equal(ping.mode, 'servidor');
 
   const html = await (await fetch(`${BASE}/`)).text();
-  assert.match(html, /Hold'em Club/);
+  assert.match(html, /Sala de juegos/);
   const css = await fetch(`${BASE}/css/style.css`);
   assert.match(css.headers.get('content-type'), /text\/css/);
 });

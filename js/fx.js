@@ -236,3 +236,77 @@ export function tweenNumber(el, from, to, duration = 700, format = (v) => Math.r
   }
   requestAnimationFrame(frame);
 }
+
+// -------------------------------------------------- aviso de "te toca a ti"
+
+/**
+ * El navegador no deja vibrar hasta que el usuario ha tocado la pantalla.
+ * Llevamos la cuenta para no llenar la consola de avisos al reconectar.
+ */
+let huboGesto = false;
+const marcarGesto = () => {
+  huboGesto = true;
+  window.removeEventListener('pointerdown', marcarGesto);
+  window.removeEventListener('keydown', marcarGesto);
+  window.removeEventListener('touchstart', marcarGesto);
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', marcarGesto, { passive: true });
+  window.addEventListener('keydown', marcarGesto);
+  window.addEventListener('touchstart', marcarGesto, { passive: true });
+}
+
+export function vibrar(patron) {
+  if (!huboGesto || typeof navigator === 'undefined' || !navigator.vibrate) return;
+  try { navigator.vibrate(patron); } catch (_) {}
+}
+
+/**
+ * Parpadeo del título de la pestaña. Sirve para enterarte de que te toca
+ * cuando estás en otra pestaña, que es lo normal en clase.
+ *
+ * Se guarda si tienes turno pendiente: así también parpadea cuando te vas
+ * de la pestaña con el turno ya abierto, no solo si te toca estando fuera.
+ */
+let tituloOriginal = null;
+let tituloTimer = null;
+let turnoPendiente = false;
+let textoTurno = '🔔 ¡Te toca!';
+
+export function parpadearTitulo(texto = textoTurno) {
+  if (tituloTimer || typeof document === 'undefined') return;
+  tituloOriginal = tituloOriginal || document.title;
+  let puesto = false;
+  tituloTimer = setInterval(() => {
+    document.title = puesto ? tituloOriginal : texto;
+    puesto = !puesto;
+  }, 900);
+}
+
+export function pararParpadeo() {
+  turnoPendiente = false;
+  if (!tituloTimer) return;
+  clearInterval(tituloTimer);
+  tituloTimer = null;
+  if (tituloOriginal) document.title = tituloOriginal;
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (turnoPendiente) parpadearTitulo(textoTurno);
+    } else if (tituloTimer) {
+      clearInterval(tituloTimer);
+      tituloTimer = null;
+      if (tituloOriginal) document.title = tituloOriginal;
+    }
+  });
+}
+
+/** Sonido lo pone cada juego; esto es el resto del aviso. */
+export function avisarTurno(texto = '🔔 ¡Te toca!') {
+  textoTurno = texto;
+  turnoPendiente = true;
+  vibrar([35, 60, 35]);
+  if (typeof document !== 'undefined' && document.hidden) parpadearTitulo(texto);
+}

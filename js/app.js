@@ -602,6 +602,7 @@ function toastUno(texto, clase = '') {
 
 function entrarUno(session, code) {
   state.session = session;
+  recordarSala('uno', code);
   keepAwake();
   mostrarPantalla('unoGame');
   $('unoRoomCode').textContent = code;
@@ -646,6 +647,7 @@ function bindUnoControles(session, code) {
 
   $('unoLeave').onclick = () => {
     if (!confirm('¿Salir de la partida?')) return;
+    olvidarSala();
     releaseWake();
     if (state.ui) state.ui.destroy();
     if (state.session) state.session.close();
@@ -678,6 +680,11 @@ function bindUnoControles(session, code) {
  * (crear / unirse / practicar), asi que se configura con una descripcion.
  */
 function bindJuegoSimple(cfg) {
+  REENTRADA.set(cfg.juego, {
+    entrar: (session, code) => entrarJuego(cfg, session, code),
+    campoCodigo: cfg.codigo, pestanaUnirse: `#${cfg.lobby} [data-gtab="${cfg.lobby === 'bjLobby' ? 'bj' : 'ab'}-join"]`
+  });
+
   document.querySelectorAll(`#${cfg.lobby} [data-gtab]`).forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll(`#${cfg.lobby} [data-gtab]`).forEach((t) => t.classList.remove('active'));
@@ -775,6 +782,7 @@ function bindJuegoSimple(cfg) {
 
 function entrarJuego(cfg, session, code) {
   state.session = session;
+  recordarSala(cfg.juego, code);
   keepAwake();
   mostrarPantalla(cfg.pantalla);
   const cod = $(cfg.roomCode);
@@ -788,6 +796,7 @@ function entrarJuego(cfg, session, code) {
   const seccion = document.getElementById(cfg.pantalla);
   seccion.querySelector('[data-salir-juego]').onclick = () => {
     if (!confirm('¿Salir de la partida?')) return;
+    olvidarSala();
     releaseWake();
     if (state.ui) state.ui.destroy();
     if (state.session) state.session.close();
@@ -796,6 +805,25 @@ function entrarJuego(cfg, session, code) {
     state.ui = null;
     mostrarPantalla(cfg.lobby);
   };
+  // Tocar el código comparte la invitación, igual que en el póker y el UNO.
+  const chip = seccion.querySelector('.room-chip');
+  if (chip) {
+    chip.classList.toggle('local', code === 'LOCAL');
+    chip.onclick = async () => {
+      if (code === 'LOCAL') return;
+      const url = `${inviteOrigin()}${location.pathname}?sala=${code}&juego=${cfg.juego}`;
+      const nombre = (JUEGOS.find((j) => j.id === cfg.juego) || {}).nombre || 'una partida';
+      const text = `Te invito a jugar al ${nombre}. Sala ${code}: ${url}`;
+      try {
+        if (navigator.share) await navigator.share({ title: nombre, text, url });
+        else {
+          await navigator.clipboard.writeText(url);
+          if (state.ui && state.ui.aviso) state.ui.aviso('Invitación copiada', 'Pégasela a tus amigos');
+        }
+      } catch (_) {}
+    };
+  }
+
   seccion.querySelector('[data-chat-juego]').onclick = () => {
     $('sidePanel').classList.add('open');
     document.querySelectorAll('.side-tab').forEach((t) => t.classList.toggle('active', t.dataset.side === 'chat'));
@@ -809,6 +837,15 @@ function entrarJuego(cfg, session, code) {
 
 function bindJuegosNuevos() {
   document.querySelectorAll('[data-volver-hub]').forEach((b) => (b.onclick = () => mostrarPantalla('hub')));
+
+  REENTRADA.set('holdem', {
+    entrar: (session, code) => enterGame(session, code),
+    campoCodigo: 'joinCode', pestanaUnirse: '#lobby .tab[data-tab="join"]'
+  });
+  REENTRADA.set('uno', {
+    entrar: (session, code) => entrarUno(session, code),
+    campoCodigo: 'unoJoinCode', pestanaUnirse: '#unoLobby [data-utab="join"]'
+  });
 
   bindJuegoSimple({
     juego: 'blackjack', lobby: 'bjLobby', pantalla: 'bjGame', UI: BlackjackUI,
@@ -861,8 +898,121 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.session) keepAwake();
 });
 
+// ------------------------------------------------------- volver a la partida
+
+/**
+ * Si el iPad bloquea la pantalla, se cambia de pestaña o se recarga sin
+ * querer, la partida sigue viva en el servidor. Guardamos en qué sala
+ * estábamos para volver a entrar solos al abrir la página.
+ */
+const SALA_KEY = 'holdem-club/sala';
+
+/** Cómo se vuelve a entrar en cada juego. Se rellena al enlazar los lobbies. */
+const REENTRADA = new Map();
+
+function recordarSala(juego, code) {
+  if (!code || code === 'LOCAL') return olvidarSala();
+  try {
+    sessionStorage.setItem(SALA_KEY, JSON.stringify({ juego, code, cuando: Date.now() }));
+  } catch (_) {}
+}
+
+function olvidarSala() {
+  try { sessionStorage.removeItem(SALA_KEY); } catch (_) {}
+}
+
+function salaRecordada() {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SALA_KEY) || 'null');
+    if (!s || !s.code || !REENTRADA.has(s.juego)) return null;
+    // Más de dos horas parado: ya no tiene sentido volver.
+    if (Date.now() - (s.cuando || 0) > 2 * 60 * 60 * 1000) return null;
+    return s;
+  } catch (_) { return null; }
+}
+
+/** El código que venga en el enlace: ...?sala=ABCD&juego=uno */
+function salaDelEnlace() {
+  try {
+    const q = new URLSearchParams(location.search);
+    const code = (q.get('sala') || q.get('room') || '').trim().toUpperCase();
+    const juego = (q.get('juego') || q.get('game') || 'holdem').toLowerCase();
+    if (!/^[A-Z0-9]{4}$/.test(code) || !REENTRADA.has(juego)) return null;
+    return { juego, code };
+  } catch (_) { return null; }
+}
+
+/** Quita los parámetros del enlace sin recargar, para no reentrar en bucle. */
+function limpiarEnlace() {
+  try {
+    if (location.search) history.replaceState(null, '', location.pathname + location.hash);
+  } catch (_) {}
+}
+
+/**
+ * Intenta meterse otra vez en una sala. Devuelve true si lo consigue.
+ * Si falla (la sala ya no existe, no hay servidor...) se queda en el hub.
+ */
+async function volverASala({ juego, code }, motivo = 'recordada') {
+  const entrada = REENTRADA.get(juego);
+  if (!entrada) return false;
+  if (!state.server) await detectServer();
+  if (!state.server) return false;
+
+  const cartel = $('reconectando');
+  if (cartel) {
+    cartel.querySelector('b').textContent = code;
+    cartel.hidden = false;
+  }
+  const session = new RelaySession({
+    code, name: state.profile.name, avatar: state.profile.avatar, playerId: tabPlayerId(), juego
+  });
+  try {
+    await session.open();
+    entrada.entrar(session, code);
+    recordarSala(juego, code);
+    if (state.ui && state.ui.toast) {
+      state.ui.toast(motivo === 'enlace' ? `Dentro de la sala ${code}` : 'Has vuelto a la partida');
+    }
+    return true;
+  } catch (_) {
+    try { session.close(); } catch (__) {}
+    if (motivo === 'recordada') olvidarSala();
+    return false;
+  } finally {
+    if (cartel) cartel.hidden = true;
+  }
+}
+
+/** Al arrancar: primero el enlace de invitación, luego la sala recordada. */
+async function reanudarPartida() {
+  const delEnlace = salaDelEnlace();
+  if (delEnlace) {
+    limpiarEnlace();
+    const juego = JUEGOS.find((j) => j.id === delEnlace.juego);
+    if (!state.profile.name) {
+      // Sin nombre no se puede entrar: lo dejamos preparado en el vestíbulo.
+      const entrada = REENTRADA.get(delEnlace.juego);
+      if (entrada) {
+        if (juego && juego.abrir) juego.abrir();
+        const campo = $(entrada.campoCodigo);
+        if (campo) campo.value = delEnlace.code;
+        const pestana = document.querySelector(entrada.pestanaUnirse);
+        if (pestana) pestana.click();
+      }
+      return;
+    }
+    if (await volverASala(delEnlace, 'enlace')) return;
+    if (juego && juego.abrir) juego.abrir();
+    return;
+  }
+  const guardada = salaRecordada();
+  if (guardada) await volverASala(guardada, 'recordada');
+}
+
 function enterGame(session, code) {
   state.session = session;
+  recordarSala('holdem', code);
   keepAwake();
   mostrarPantalla('game');
   $('roomCode').textContent = code;
@@ -1000,6 +1150,7 @@ function bindGameControls(session, code) {
 }
 
 function leaveGame() {
+  olvidarSala();
   releaseWake();
   if (state.ui) state.ui.destroy();
   if (state.session) state.session.close();
@@ -1117,10 +1268,9 @@ bindUnoLobby();
 bindJuegosNuevos();
 detectServer();
 
-// Si llegas con un código en el enlace, directo al Hold'em.
-if (new URLSearchParams(location.search).get('sala') && state.profile.name) {
-  mostrarPantalla('lobby');
-}
+// Con un código en el enlace se entra directo; si no, se vuelve sola a la
+// última sala (el iPad bloquea la pantalla y recarga la página él solo).
+reanudarPartida();
 
 // El audio del navegador necesita un gesto del usuario para arrancar.
 const unlock = () => {

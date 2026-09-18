@@ -2,7 +2,7 @@
 
 import { RANK_LABEL, SUIT_GLYPH } from './cards.js';
 import { sfx } from './sound.js';
-import { motion, ms, rectIn, floatText, makeChipEl, chipBreakdown, initConfetti, confettiBurst, animateOnce } from './fx.js';
+import { motion, ms, rectIn, floatText, makeChipEl, chipBreakdown, initConfetti, confettiBurst, animateOnce, avisarTurno, pararParpadeo } from './fx.js';
 
 const FICHAS = [10, 25, 50, 100, 250];
 const COLOR_FICHA = { 10: '#e9eef5', 25: '#1f7a43', 50: '#b02b2b', 100: '#14202b', 250: '#2b2f77' };
@@ -116,6 +116,13 @@ export class BlackjackUI {
     this.view = view;
     this.render();
     this.animar(eventos || []);
+    // Te avisa tanto si te toca decidir como si toca apostar.
+    const yo = this.yo();
+    const meToca = !!(view.opciones && view.opciones.tuTurno) ||
+      (view.estado === 'apuestas' && !!yo && yo.apuesta === 0 && yo.fichas > 0);
+    if (meToca && !this._tocaba) { sfx.turn(); avisarTurno('🔔 ¡Te toca!'); }
+    if (!meToca) pararParpadeo();
+    this._tocaba = meToca;
   }
 
   render() {
@@ -412,6 +419,7 @@ export class BlackjackUI {
   }
 
   destroy() {
+    pararParpadeo();
     clearTimeout(this._t);
     if (this.el.fx) this.el.fx.innerHTML = '';
   }

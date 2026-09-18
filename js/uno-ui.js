@@ -2,7 +2,7 @@
 // Igual que en el poker, aqui no se deciden reglas: solo se representa el estado.
 
 import { sfx } from './sound.js';
-import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce } from './fx.js';
+import { motion, ms, rectIn, floatText, initConfetti, confettiBurst, animateOnce, avisarTurno, pararParpadeo } from './fx.js';
 
 const SIMBOLO = { mas2: '+2', salta: '🚫', sentido: '🔄', mas4: '+4', comodin: '★' };
 const COLOR_HEX = { rojo: '#e8443a', amarillo: '#f2c231', verde: '#2fae5a', azul: '#2f7fe0' };
@@ -125,6 +125,11 @@ export class UnoUI {
     this.view = view;
     this.render();
     this.animar(eventos || []);
+    // Aviso de turno: suena, vibra y parpadea el título si estás en otra pestaña.
+    const meToca = this.esMiTurno();
+    if (meToca && !this._tocaba) { sfx.turn(); avisarTurno('🔔 ¡Te toca!'); }
+    if (!meToca) pararParpadeo();
+    this._tocaba = meToca;
   }
 
   render() {
@@ -513,6 +518,7 @@ export class UnoUI {
   }
 
   destroy() {
+    pararParpadeo();
     clearTimeout(this._avisoTimer);
   }
 }
