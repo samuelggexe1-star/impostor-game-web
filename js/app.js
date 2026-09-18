@@ -159,6 +159,7 @@ function mostrarPantalla(cual) {
   for (const id of ['hub', 'lobby', 'game', 'unoLobby', 'unoGame', 'bjLobby', 'bjGame', 'abLobby', 'abGame']) {
     document.getElementById(id).classList.toggle('active', id === cual);
   }
+  if (cual === 'hub') refrescarSalasHub();
   if (cual.endsWith('Lobby') || cual === 'lobby') {
     if (cual === 'lobby') {
       $('lobbyAvatar').textContent = state.profile.avatar;
@@ -186,7 +187,8 @@ function construirHub() {
       <span class="g-icon">${j.icono}</span>
       <span class="g-name">${escapeHtml(j.nombre)}</span>
       <span class="g-desc">${escapeHtml(j.descripcion)}</span>
-      <span class="g-go">${j.bloqueado ? 'En preparación' : escapeHtml(j.accion)}</span>`;
+      <span class="g-go">${j.bloqueado ? 'En preparación' : escapeHtml(j.accion)}</span>
+      <span class="g-salas" data-juego="${escapeHtml(j.id)}" hidden></span>`;
     if (!j.bloqueado) {
       card.onclick = () => {
         if (!requireNameHub()) return;
@@ -1239,6 +1241,7 @@ async function detectServer() {
       };
     }
     refreshRooms();
+    refrescarSalasHub();
     return;
   }
 
@@ -1276,6 +1279,31 @@ const LISTAS_SALAS = [
   { juego: 'blackjack', caja: 'bjRooms', campo: 'bjJoinCode',  lobby: 'bjLobby',  entrar: () => $('bjBtnJoin').click() },
   { juego: 'altobajo',  caja: 'abRooms', campo: 'abJoinCode',  lobby: 'abLobby',  entrar: () => $('abBtnJoin').click() }
 ];
+
+/**
+ * Chapita en cada tarjeta del hub con las salas abiertas de ese juego, para
+ * ver de un vistazo dónde está la gente sin entrar a mirar uno por uno.
+ */
+async function refrescarSalasHub() {
+  clearTimeout(refrescarSalasHub._t);
+  if (!$('hub').classList.contains('active')) return;
+  if (!state.server) {
+    document.querySelectorAll('.g-salas').forEach((e) => (e.hidden = true));
+  } else {
+    const todas = await relayRooms();
+    const cuenta = new Map();
+    for (const r of todas) {
+      const j = r.juego || 'holdem';
+      cuenta.set(j, (cuenta.get(j) || 0) + 1);
+    }
+    for (const el of document.querySelectorAll('.g-salas')) {
+      const n = cuenta.get(el.dataset.juego) || 0;
+      el.hidden = n === 0;
+      el.textContent = n === 1 ? '1 sala abierta' : `${n} salas abiertas`;
+    }
+  }
+  refrescarSalasHub._t = setTimeout(refrescarSalasHub, 6000);
+}
 
 async function refreshRooms() {
   clearTimeout(refreshRooms._t);

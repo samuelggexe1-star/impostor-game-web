@@ -395,6 +395,25 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   transition: transform .16s ease, border-color .2s ease, box-shadow .25s ease;
 }
+/* Chapita de «hay gente jugando aquí». Late un poco para que se vea. */
+.g-salas {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: .74rem; font-weight: 800;
+  letter-spacing: .04em;
+  padding: 3px 10px;
+  border-radius: 99px;
+  color: var(--green);
+  background: rgba(53,208,127,.16);
+  border: 1px solid rgba(53,208,127,.35);
+  animation: salasLate 2.6s ease-in-out infinite;
+}
+@keyframes salasLate {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(53,208,127,.35); }
+  50% { box-shadow: 0 0 0 5px rgba(53,208,127,0); }
+}
+@media (prefers-reduced-motion: reduce) { .g-salas { animation: none; } }
+
 .game-card:hover:not(.locked) {
   transform: translateY(-4px);
   border-color: var(--gold);
