@@ -1,12 +1,12 @@
 {
-  "name": "holdem-club",
+  "name": "sala-de-juegos",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Texas Hold'em online para jugar con amigos (cliente estatico + P2P)",
+  "description": "Texas Hold'em, UNO, blackjack y alto o bajo para jugar con amigos desde el navegador",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/"
+    "test": "node --test \"tests/**/*.test.mjs\""
   },
   "engines": {
     "node": ">=18"
