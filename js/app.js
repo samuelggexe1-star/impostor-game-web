@@ -634,8 +634,45 @@ function bindPanelCompartido(session, opciones = {}) {
       if (tab.dataset.side === 'chat' && state.ui && state.ui.clearChatBadge) state.ui.clearChatBadge();
     };
   });
+  bindChatRapido(session, opciones.juego);
   bindAjustes();
   bindControlesMesa(session, opciones);
+}
+
+/** Frases y emojis para no tener que escribir con el teclado del iPad. */
+const FRASES_RAPIDAS = {
+  holdem: ['¡Buena mano!', 'Voy con todo 😤', 'Me la juego', 'Qué suerte tienes', 'Paso, paso…', 'gg'],
+  uno: ['¡UNO!', 'Serás rata', 'Qué cartas me entran', 'Me toca robar otra vez', 'Venga ya', 'gg'],
+  blackjack: ['Otra carta', 'Me planto', 'Qué manía de pasarme', 'Vaya banca', 'Buena mano', 'gg'],
+  altobajo: ['Estaba cantado', 'No me lo creo', 'Qué racha llevas', 'Casi', 'Esta la fallo seguro', 'gg']
+};
+const EMOJIS_CHAT = ['👏', '😂', '😱', '🔥', '🤔', '😎', '🍀', '💀', '🤡', '🍺'];
+
+function bindChatRapido(session, juego = 'holdem') {
+  const quick = $('chatQuick');
+  quick.innerHTML = '';
+  for (const f of (FRASES_RAPIDAS[juego] || FRASES_RAPIDAS.holdem)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quick-msg';
+    b.textContent = f;
+    b.onclick = () => session.chat(f);
+    quick.appendChild(b);
+  }
+
+  const fila = $('chatEmojis');
+  fila.innerHTML = '';
+  for (const e of EMOJIS_CHAT) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = e;
+    b.title = 'Lanzar ' + e;
+    b.onclick = () => {
+      session.emote(e, -1);
+      sfx.emote();
+    };
+    fila.appendChild(b);
+  }
 }
 
 /** Los ajustes son del dispositivo, no de la partida: valen para todo. */
@@ -698,7 +735,7 @@ function bindControlesMesa(session, { rebuy = false } = {}) {
 
 function bindUnoControles(session, code) {
   // En el UNO no hay fichas que recargar.
-  bindPanelCompartido(session, { rebuy: false });
+  bindPanelCompartido(session, { rebuy: false, juego: 'uno' });
 
   $('unoLeave').onclick = () => {
     if (!confirm('¿Salir de la partida?')) return;
@@ -846,7 +883,7 @@ function entrarJuego(cfg, session, code) {
   const ui = new cfg.UI({ session, settings: state.settings });
   state.ui = ui;
   ui.init();
-  bindPanelCompartido(session, { rebuy: cfg.juego === 'blackjack' });
+  bindPanelCompartido(session, { rebuy: cfg.juego === 'blackjack', juego: cfg.juego });
 
   const seccion = document.getElementById(cfg.pantalla);
   seccion.querySelector('[data-salir-juego]').onclick = () => {
@@ -1089,7 +1126,7 @@ function enterGame(session, code) {
 }
 
 function bindGameControls(session, code) {
-  bindPanelCompartido(session, { rebuy: true });
+  bindPanelCompartido(session, { rebuy: true, juego: 'holdem' });
   $('btnPanel').onclick = () => $('sidePanel').classList.toggle('open');
 
   const abrirChat = () => {

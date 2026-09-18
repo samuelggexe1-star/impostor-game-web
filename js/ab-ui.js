@@ -293,6 +293,7 @@ export class AltoBajoUI {
           break;
         }
         case 'chat': this.burbuja(ev.msg); sfx.chat(); this.bumpBadge(); break;
+        case 'emote': this.lanzarEmoji(ev); break;
         case 'finPartida':
           this.aviso('Fin de la partida', `${ev.nombre} llega a ${ev.puntos} puntos`, 'bien', 2600);
           break;
@@ -356,6 +357,38 @@ export class AltoBajoUI {
       this._burbujas.delete(clave);
     }, ms(4200));
     this._burbujas.set(clave, { el, timer });
+  }
+
+  /**
+   * El emoji sale volando y girando desde quien lo lanza. El evento trae el
+   * asiento, así que buscamos al jugador por ahí y si no, lo soltamos en medio.
+   */
+  lanzarEmoji(ev) {
+    const capa = this.el.fx;
+    if (!capa || motion.reduced) return;
+    const lista = (this.view && this.view.jugadores) || [];
+    const quien = lista.find((p) => p.seat === ev.from);
+    const ancla = quien ? this.anclaDe({ from: quien.nombre }) : null;
+    const r = ancla ? rectIn(ancla, capa) : null;
+    const caja = capa.getBoundingClientRect();
+    const desde = r || { cx: caja.width / 2, cy: caja.height * 0.7, w: 0, h: 0 };
+
+    const el = document.createElement('div');
+    el.className = 'float-text emoji';
+    el.textContent = ev.emoji;
+    el.style.position = 'absolute';
+    el.style.left = desde.cx + 'px';
+    el.style.top = desde.cy + 'px';
+    capa.appendChild(el);
+
+    const dx = (Math.random() - 0.5) * 120;
+    animateOnce(el, [
+      { transform: 'translate(-50%,-50%) scale(.4) rotate(0deg)', opacity: 0 },
+      { transform: `translate(-50%,-50%) translate(${dx * 0.5}px, -70px) scale(1.7) rotate(200deg)`, opacity: 1, offset: .45 },
+      { transform: `translate(-50%,-50%) translate(${dx}px, -150px) scale(1.2) rotate(360deg)`, opacity: 0 }
+    ], { duration: ms(1100), easing: 'cubic-bezier(.2,.8,.3,1)' })
+      .finished.catch(() => {}).then(() => el.remove());
+    sfx.emote();
   }
 
   /** Limpia los bocadillos pendientes al salir. */

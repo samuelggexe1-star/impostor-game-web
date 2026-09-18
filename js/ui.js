@@ -117,7 +117,6 @@ export class TableUI {
     this.seatEls.clear();
     this.boardEls = [];
     this.buildEmotes();
-    this.buildQuickChat();
     this.bindControls();
     this.startClock();
     window.addEventListener('resize', () => {
@@ -233,19 +232,6 @@ export class TableUI {
       S.bet.style.top = betPt.y.toFixed(2) + '%';
     });
     return order;
-  }
-
-  buildQuickChat() {
-    const frases = ['¡Buena mano!', 'Voy con todo 😤', 'Me la juego', 'Qué suerte tienes', 'Paso, paso…', 'gg'];
-    this.el.chatQuick.innerHTML = '';
-    for (const f of frases) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'quick-msg';
-      b.textContent = f;
-      b.onclick = () => this.session.chat(f);
-      this.el.chatQuick.appendChild(b);
-    }
   }
 
   buildEmotes() {

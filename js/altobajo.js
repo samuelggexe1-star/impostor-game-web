@@ -225,6 +225,7 @@ export class AltoBajoGame {
       vidasMax: this.vidas,
       jugadores: this.jugadores.map((p) => ({
         id: p.id,
+        seat: p.seat,
         nombre: p.nombre,
         avatar: p.avatar,
         esBot: p.esBot,
