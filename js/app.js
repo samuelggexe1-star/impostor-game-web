@@ -1265,32 +1265,47 @@ async function askForServer() {
 }
 
 /** Mesas abiertas ahora mismo, para entrar sin teclear el código. */
+/**
+ * Salas abiertas de cada juego. Antes solo se pintaban las del póker (y el
+ * hueco del UNO estaba en el HTML pero sin rellenar), así que en los demás
+ * juegos había que escribir el código a mano.
+ */
+const LISTAS_SALAS = [
+  { juego: 'holdem',   caja: 'lanRooms', campo: 'joinCode',    lobby: 'lobby',    entrar: () => joinRoom() },
+  { juego: 'uno',      caja: 'unoRooms', campo: 'unoJoinCode', lobby: 'unoLobby', entrar: () => $('unoBtnJoin').click() },
+  { juego: 'blackjack', caja: 'bjRooms', campo: 'bjJoinCode',  lobby: 'bjLobby',  entrar: () => $('bjBtnJoin').click() },
+  { juego: 'altobajo',  caja: 'abRooms', campo: 'abJoinCode',  lobby: 'abLobby',  entrar: () => $('abBtnJoin').click() }
+];
+
 async function refreshRooms() {
-  if (!state.server) return;
-  const box = $('lanRooms');
-  const list = await relayRooms();
+  clearTimeout(refreshRooms._t);
+  const visible = LISTAS_SALAS.find((l) => $(l.lobby) && $(l.lobby).classList.contains('active'));
+  if (!visible || !state.server) return;
+
+  const todas = await relayRooms();
+  const list = todas.filter((r) => (r.juego || 'holdem') === visible.juego);
+  const box = $(visible.caja);
+  if (!box) return;
+
   if (!list.length) {
     box.hidden = true;
   } else {
     box.hidden = false;
-    box.innerHTML = '<span class="field-label">Mesas abiertas ahora</span>' + list
+    box.innerHTML = '<span class="field-label">Salas abiertas ahora</span>' + list
       .map((r) => `<button type="button" class="lan-room" data-code="${escapeHtml(r.code)}">
           <span class="r-code">${escapeHtml(r.code)}</span>
-          <span class="r-host">mesa de ${escapeHtml(r.host)} · ciegas ${escapeHtml(r.blinds || '')}</span>
+          <span class="r-host">de ${escapeHtml(r.host)} · ${escapeHtml(r.detalle || '')}</span>
           <span class="r-players">${r.players} 👤</span>
         </button>`)
       .join('');
     box.querySelectorAll('.lan-room').forEach((b) => {
       b.onclick = () => {
-        $('joinCode').value = b.dataset.code;
-        joinRoom();
+        $(visible.campo).value = b.dataset.code;
+        visible.entrar();
       };
     });
   }
-  clearTimeout(refreshRooms._t);
-  if ($('lobby').classList.contains('active')) {
-    refreshRooms._t = setTimeout(refreshRooms, 5000);
-  }
+  refreshRooms._t = setTimeout(refreshRooms, 5000);
 }
 
 function escapeHtml(s) {
